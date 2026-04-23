@@ -90,12 +90,18 @@ private:
     juce::ToggleButton lookaheadToggle { "Lookahead" };
     LabelledKnob       lookaheadKnob;
 
+    // ── Dry/Wet mix ───────────────────────────────────────────────────────
+    LabelledKnob       dryWetKnob;
+
     // ── Preset combo ─────────────────────────────────────────────────────────
     juce::ComboBox presetCombo;
     juce::Label    presetLabel;
 
     // ── Reset button ─────────────────────────────────────────────────────────
     juce::TextButton resetButton { "Reset Integrated" };
+
+    // ── History tick counter (per-instance, not static) ───────────────────────
+    int histTick = 0;
 
     // ── LUFS readout labels ───────────────────────────────────────────────────
     juce::Label momentaryLabel, shortTermLabel, integratedLabel;
@@ -109,7 +115,7 @@ private:
     std::unique_ptr<SliderAttachment> autoGainTargetAtt, autoGainSpeedAtt;
     std::unique_ptr<SliderAttachment> expThreshAtt, expRatioAtt, expAttackAtt,
                                       expReleaseAtt, expKneeAtt;
-    std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt;
+    std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt, dryWetAtt;
     std::unique_ptr<ButtonAttachment> gateOnAtt, autoGainOnAtt, levelerOnAtt, 
                                       expanderOnAtt, limiterOnAtt, lookaheadOnAtt;
 

@@ -1,4 +1,5 @@
 #include "GainSmoother.h"
+#include "DspUtils.h"
 #include <algorithm>
 
 // ── prepare / reset ──────────────────────────────────────────────────────────
@@ -48,8 +49,8 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
     const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
 
-    const float attCoeff = msToCoeff(attackMs .load(), sampleRate_);
-    const float relCoeff = msToCoeff(releaseMs.load(), sampleRate_);
+    const float attCoeff = DspUtils::msToCoeff(attackMs .load(), sampleRate_);
+    const float relCoeff = DspUtils::msToCoeff(releaseMs.load(), sampleRate_);
 
     if (lookaheadEnabled && lookaheadSamples > 0)
     {
@@ -92,11 +93,4 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
     }
 
     currentGainDb.store(smoothedGainDb);
-}
-
-// ── msToCoeff ────────────────────────────────────────────────────────────────
-float GainSmoother::msToCoeff(float ms, double sr) noexcept
-{
-    if (ms <= 0.0f) return 0.0f;
-    return std::exp(-1.0f / (float)(ms * 0.001 * sr));
 }

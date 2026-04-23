@@ -134,6 +134,8 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
 {
     setLookAndFeel(&laf);
     setSize(960, 560);
+    setResizable(true, true);
+    setResizeLimits(720, 420, 1600, 900);
 
     // ── Meters ────────────────────────────────────────────────────────────────
     addAndMakeVisible(lufsDisplay);
@@ -173,6 +175,9 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     // ── Lookahead section ─────────────────────────────────────────────────────
     addAndMakeVisible(lookaheadToggle);
     lookaheadKnob.setup(this, "Time");
+
+    // ── Dry/Wet ───────────────────────────────────────────────────────────────
+    dryWetKnob.setup(this, "Mix %");
 
     // ── Preset combo ─────────────────────────────────────────────────────────
     presetLabel.setText("Preset:", juce::dontSendNotification);
@@ -238,6 +243,7 @@ void LufsNormalizerEditor::buildAttachments()
 
     ceilingAtt     = std::make_unique<SliderAttachment>(apvts, ParamID::LIMITER_CEILING,  ceilingKnob.slider);
     lookaheadMsAtt = std::make_unique<SliderAttachment>(apvts, ParamID::LOOKAHEAD_MS,     lookaheadKnob.slider);
+    dryWetAtt      = std::make_unique<SliderAttachment>(apvts, ParamID::DRY_WET,          dryWetKnob.slider);
 
     levelerOnAtt   = std::make_unique<ButtonAttachment>(apvts, ParamID::LEVELER_ENABLED,  levelerToggle);
     expanderOnAtt  = std::make_unique<ButtonAttachment>(apvts, ParamID::EXP_ENABLED,      expanderToggle);
@@ -363,13 +369,15 @@ void LufsNormalizerEditor::layoutComponents()
     limiterArea.removeFromTop(8);
     ceilingKnob.setBounds(limiterArea.removeFromLeft(limiterArea.getWidth() / 2));
 
-    // Lookahead
+    // Lookahead + Mix
     lookaheadArea.removeFromTop(8);
     auto lookTitleRow = lookaheadArea.removeFromTop(24);
     lookTitleRow.removeFromLeft(8);
     lookaheadToggle.setBounds(lookTitleRow.removeFromLeft(150));
     lookaheadArea.removeFromTop(8);
-    lookaheadKnob.setBounds(lookaheadArea.removeFromLeft(lookaheadArea.getWidth() / 2));
+    const int lookKnobW = lookaheadArea.getWidth() / 2;
+    lookaheadKnob.setBounds(lookaheadArea.removeFromLeft(lookKnobW));
+    dryWetKnob.setBounds(lookaheadArea);
 }
 
 // ── paint ─────────────────────────────────────────────────────────────────────
@@ -473,7 +481,6 @@ void LufsNormalizerEditor::timerCallback()
     grMeter.repaint();
 
     // Update history (push every other tick → ~10 Hz)
-    static int histTick = 0;
     if (++histTick >= 2)
     {
         histTick = 0;
@@ -489,9 +496,9 @@ void LufsNormalizerEditor::timerCallback()
         return juce::String(v, 1);
     };
 
-    momentaryLabel .setText("M: "  + fmt(mom)  + " LU", juce::dontSendNotification);
-    shortTermLabel .setText("ST: " + fmt(st)   + " LU", juce::dontSendNotification);
-    integratedLabel.setText("I: "  + fmt(intg) + " LU", juce::dontSendNotification);
+    momentaryLabel .setText("M: "  + fmt(mom)  + " LUFS", juce::dontSendNotification);
+    shortTermLabel .setText("ST: " + fmt(st)   + " LUFS", juce::dontSendNotification);
+    integratedLabel.setText("I: "  + fmt(intg) + " LUFS", juce::dontSendNotification);
 
     // Colour-code integrated label
     const float target = processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load();

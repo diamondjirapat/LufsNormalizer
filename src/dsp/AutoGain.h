@@ -13,6 +13,7 @@ public:
     void setEnabled(bool shouldBeEnabled) { enabled = shouldBeEnabled; }
     void setTargetRmsDb(float targetDb)   { targetRmsDb = targetDb; }
     void setSpeedMs(float speedMs); // Controls how fast the gain rides
+    void setGateThresholdDb(float threshDb) { gateThresholdDb = threshDb; }
 
     void processBlock(juce::AudioBuffer<float>& buffer);
     
@@ -22,6 +23,7 @@ private:
     bool  enabled = true;
     float targetRmsDb = -18.0f;
     std::atomic<float> currentGainDb { 0.0f };
+    float gateThresholdDb = -60.0f;
     
     double sampleRate { 44100.0 };
     

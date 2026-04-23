@@ -41,6 +41,11 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     const int numChannels = buffer.getNumChannels();
     const int numSamples  = buffer.getNumSamples();
 
+    // Get raw channel pointers for direct access (avoids per-sample bounds checks)
+    std::vector<float*> channelPtrs((size_t)numChannels);
+    for (int ch = 0; ch < numChannels; ++ch)
+        channelPtrs[(size_t)ch] = buffer.getWritePointer(ch);
+
     // Process sample by sample
     for (int i = 0; i < numSamples; ++i)
     {
@@ -48,7 +53,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         float sumSq = 0.0f;
         for (int ch = 0; ch < numChannels; ++ch)
         {
-            const float sample = buffer.getSample(ch, i);
+            const float sample = channelPtrs[(size_t)ch][i];
             sumSq += sample * sample;
         }
         float meanSq = sumSq / (float)numChannels;
@@ -61,10 +66,15 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         float currentRmsDb = 10.0f * std::log10(smoothedSq);
 
         // 4. Calculate required gain to hit target
-        float requiredGainDb = targetRmsDb - currentRmsDb;
+        float requiredGainDb = 0.0f;
         
-        // Clamp the required gain to prevent extreme behavior (e.g., max +/- 12 dB)
-        requiredGainDb = std::clamp(requiredGainDb, -12.0f, 12.0f);
+        // If the signal is below the gate threshold, return gain to 0 dB
+        if (currentRmsDb > gateThresholdDb)
+        {
+            requiredGainDb = targetRmsDb - currentRmsDb;
+            // Clamp the required gain to prevent extreme behavior (e.g., max +/- 12 dB)
+            requiredGainDb = std::clamp(requiredGainDb, -12.0f, 12.0f);
+        }
 
         // 5. Smooth the gain multiplier
         float requiredMultiplier = std::pow(10.0f, requiredGainDb / 20.0f);
@@ -72,10 +82,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
 
         // 6. Apply to signal
         for (int ch = 0; ch < numChannels; ++ch)
-        {
-            float sample = buffer.getSample(ch, i);
-            buffer.setSample(ch, i, sample * gainMultiplier);
-        }
+            channelPtrs[(size_t)ch][i] *= gainMultiplier;
     }
     
     // Store current applied gain in dB for the UI

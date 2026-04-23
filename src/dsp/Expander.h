@@ -62,7 +62,4 @@ private:
     // ── Helpers ──────────────────────────────────────────────────────────────
     /** Gain computer: returns gain in dB to apply for a given input level. */
     float computeGainDb(float inputDb, float thresh, float rat, float knee) const noexcept;
-
-    /** Convert ms to 1-pole coefficient. */
-    static float msToCoeff(float ms, double sr) noexcept;
 };

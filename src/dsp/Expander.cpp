@@ -1,4 +1,5 @@
 #include "Expander.h"
+#include "DspUtils.h"
 #include <cmath>
 #include <algorithm>
 
@@ -35,9 +36,9 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
     const float relMs   = releaseMs.load();
 
     // 1-pole RMS detector time constant (~10 ms window)
-    const float rmsCoeff    = msToCoeff(10.0f, sampleRate_);
-    const float attCoeff    = msToCoeff(attMs,  sampleRate_);
-    const float relCoeff    = msToCoeff(relMs,  sampleRate_);
+    const float rmsCoeff    = DspUtils::msToCoeff(10.0f, sampleRate_);
+    const float attCoeff    = DspUtils::msToCoeff(attMs,  sampleRate_);
+    const float relCoeff    = DspUtils::msToCoeff(relMs,  sampleRate_);
 
     float maxGrDb = 0.0f; // track peak gain reduction this block
 
@@ -114,12 +115,4 @@ float Expander::computeGainDb(float inputDb, float thresh,
         const float fullExpansion = (1.0f / rat - 1.0f) * halfKnee;
         return fullExpansion * (1.0f - t);
     }
-}
-
-// ── msToCoeff ────────────────────────────────────────────────────────────────
-float Expander::msToCoeff(float ms, double sr) noexcept
-{
-    if (ms <= 0.0f) return 0.0f;
-    // τ = ms / 1000, coeff = exp(-1 / (τ * sr))
-    return std::exp(-1.0f / (float)(ms * 0.001 * sr));
 }

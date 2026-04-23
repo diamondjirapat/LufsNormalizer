@@ -53,40 +53,51 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
         tempWritePos = (tempWritePos + 1) % bufLen;
     }
 
-    // ── Upsample to detect true peaks ────────────────────────────────────────
+    // ── Upsample to detect true peaks per-sample ──────────────────────────────
     juce::dsp::AudioBlock<float> block(buffer);
     auto upBlock = oversampling->processSamplesUp(block);
 
     const int upSamples = (int)upBlock.getNumSamples();
-    float peakLinear = 0.0f;
+
+    // Build a per-original-sample peak table from the oversampled signal
+    // Each original sample corresponds to kOversamplingFactor upsampled samples
+    std::vector<float> perSamplePeak((size_t)numSamples, 0.0f);
 
     for (int ch = 0; ch < numCh; ++ch)
     {
         const float* ptr = upBlock.getChannelPointer((size_t)ch);
         for (int i = 0; i < upSamples; ++i)
-            peakLinear = std::max(peakLinear, std::abs(ptr[i]));
+        {
+            const int origIdx = std::min(i / kOversamplingFactor, numSamples - 1);
+            perSamplePeak[(size_t)origIdx] = std::max(perSamplePeak[(size_t)origIdx], std::abs(ptr[i]));
+        }
     }
 
-    // ── Compute required gain reduction ──────────────────────────────────────
-    float targetGain = 1.0f;
-    if (peakLinear > ceiling && peakLinear > 1e-10f)
-        targetGain = ceiling / peakLinear;
-
-    // ── Smooth gain (fast attack ~0.1 ms, slow release ~50 ms) ───────────────
+    // ── Smooth gain per-sample (fast attack ~0.1 ms, slow release ~50 ms) ────
     const float attCoeff = std::exp(-1.0f / (float)(0.0001 * sampleRate_));
     const float relCoeff = std::exp(-1.0f / (float)(0.050  * sampleRate_));
 
-    const float coeff = (targetGain < smoothedGain) ? attCoeff : relCoeff;
-    smoothedGain = coeff * smoothedGain + (1.0f - coeff) * targetGain;
-    smoothedGain = std::min(smoothedGain, 1.0f); // never amplify
-
-    // Flush oversampling state. This will overwrite `buffer`, which is fine 
+    // Flush oversampling state. This will overwrite `buffer`, which is fine
     // because we have the original samples in the lookahead buffer.
     oversampling->processSamplesDown(block);
 
-    // ── Apply gain via lookahead buffer ───────────────────────────────────────
+    // ── Apply per-sample smoothed gain via lookahead buffer ───────────────────
+    float minGainThisBlock = 1.0f;
+
     for (int i = 0; i < numSamples; ++i)
     {
+        // Compute target gain for this sample
+        float targetGain = 1.0f;
+        if (perSamplePeak[(size_t)i] > ceiling && perSamplePeak[(size_t)i] > 1e-10f)
+            targetGain = ceiling / perSamplePeak[(size_t)i];
+
+        // Smooth: fast attack, slow release
+        const float coeff = (targetGain < smoothedGain) ? attCoeff : relCoeff;
+        smoothedGain = coeff * smoothedGain + (1.0f - coeff) * targetGain;
+        smoothedGain = std::min(smoothedGain, 1.0f); // never amplify
+
+        minGainThisBlock = std::min(minGainThisBlock, smoothedGain);
+
         const int readPos = (writePos - lookaheadSamples + bufLen) % bufLen;
 
         for (int ch = 0; ch < numCh; ++ch)
@@ -97,9 +108,9 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
         writePos = (writePos + 1) % bufLen;
     }
 
-    // Publish gain reduction
-    const float grDb = (smoothedGain > 1e-10f)
-                       ? 20.0f * std::log10(smoothedGain)
+    // Publish peak gain reduction for this block
+    const float grDb = (minGainThisBlock > 1e-10f)
+                       ? 20.0f * std::log10(minGainThisBlock)
                        : -144.0f;
     gainReductionDb.store(grDb);
 }

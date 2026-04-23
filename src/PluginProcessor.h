@@ -44,23 +44,40 @@ namespace ParamID
     // Lookahead
     inline constexpr const char* LOOKAHEAD_ENABLED = "lookaheadEnabled";
     inline constexpr const char* LOOKAHEAD_MS      = "lookaheadMs";
+
+    // Mix
+    inline constexpr const char* DRY_WET           = "dryWet";
 }
 
 // ── Preset definitions ────────────────────────────────────────────────────────
 struct Preset
 {
     const char* name;
+    // Leveler
     float targetLufs;
     float attackMs;
     float releaseMs;
+    float maxGainDb;
+    // Expander
     float expThreshold;
     float expRatio;
+    float expKnee;
+    // AutoGain
+    float autoGainTarget;
+    float autoGainSpeed;
+    // Gate
+    float gateThreshold;
+    // Limiter
+    float limiterCeiling;
 };
 
 inline constexpr Preset kPresets[] = {
-    { "Streaming",  -14.0f, 300.0f, 600.0f, -45.0f, 2.0f },
-    { "Podcast",    -16.0f, 200.0f, 500.0f, -40.0f, 2.5f },
-    { "Broadcast",  -23.0f, 150.0f, 400.0f, -35.0f, 3.0f },
+    //                 name         tgt   atk   rel   max   eT    eR   eK    agT   agS    gT     lC
+    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -18.0f, 1000.0f, -60.0f, -1.0f },
+    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -18.0f,  800.0f, -55.0f, -1.0f },
+    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -20.0f,  600.0f, -50.0f, -2.0f },
+    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -24.0f, 2000.0f, -60.0f, -1.0f },
+    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -16.0f, 1500.0f, -70.0f, -1.0f },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +127,7 @@ public:
 
 private:
     // ── APVTS ─────────────────────────────────────────────────────────────────
+    juce::UndoManager undoManager;
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -125,8 +143,34 @@ private:
     int   currentProgram = 0;
     float lastTargetLufs = -16.0f;
 
+    // ── Cached parameter pointers (avoids string lookups per block) ───────────
+    std::atomic<float>* pGateThreshold  = nullptr;
+    std::atomic<float>* pGateAttack     = nullptr;
+    std::atomic<float>* pGateRelease    = nullptr;
+    std::atomic<float>* pGateEnabled    = nullptr;
+    std::atomic<float>* pExpEnabled     = nullptr;
+    std::atomic<float>* pExpThreshold   = nullptr;
+    std::atomic<float>* pExpRatio       = nullptr;
+    std::atomic<float>* pExpAttack      = nullptr;
+    std::atomic<float>* pExpRelease     = nullptr;
+    std::atomic<float>* pExpKnee        = nullptr;
+    std::atomic<float>* pAutoGainEnabled = nullptr;
+    std::atomic<float>* pAutoGainTarget = nullptr;
+    std::atomic<float>* pAutoGainSpeed  = nullptr;
+    std::atomic<float>* pAttackMs       = nullptr;
+    std::atomic<float>* pReleaseMs      = nullptr;
+    std::atomic<float>* pMaxGainDb      = nullptr;
+    std::atomic<float>* pTargetLufs     = nullptr;
+    std::atomic<float>* pLevelerEnabled = nullptr;
+    std::atomic<float>* pLimiterEnabled = nullptr;
+    std::atomic<float>* pLimiterCeiling = nullptr;
+    std::atomic<float>* pLookaheadEnabled = nullptr;
+    std::atomic<float>* pLookaheadMs    = nullptr;
+    std::atomic<float>* pDryWet         = nullptr;
+
     // ── Helpers ───────────────────────────────────────────────────────────────
     void syncDspParameters();
+    void cacheParameterPointers();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LufsNormalizerProcessor)
 };

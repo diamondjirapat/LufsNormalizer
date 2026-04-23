@@ -64,6 +64,4 @@ private:
     int  delayWritePos    = 0;
     int  lookaheadSamples = 0;
     bool lookaheadEnabled = false;
-
-    static float msToCoeff(float ms, double sr) noexcept;
 };

@@ -51,7 +51,7 @@ LufsMeter::makeRLBFilterCoeffs(double fs)
 }
 
 // ── prepare ──────────────────────────────────────────────────────────────────
-void LufsMeter::prepare(double sampleRate, int /*maxBlockSize*/, int numChannels)
+void LufsMeter::prepare(double sampleRate, int maxBlockSize, int numChannels)
 {
     sampleRate_  = sampleRate;
     numChannels_ = numChannels;
@@ -77,12 +77,11 @@ void LufsMeter::prepare(double sampleRate, int /*maxBlockSize*/, int numChannels
     }
 
     // Window sizes in blocks (one block = processBlock call)
-    // We approximate using 10 ms sub-blocks internally, but here we use
-    // the actual block size. For accuracy we track samples per window.
     // Momentary = 400 ms, Short-term = 3000 ms
-    // We'll recalculate block counts dynamically in processBlock, but allocate max possible.
-    momentaryWindow.allocate((int)std::ceil(sampleRate * 0.400));
-    shortTermWindow.allocate((int)std::ceil(sampleRate * 3.000));
+    // Allocate based on block size to avoid massive over-allocation.
+    const int minBlock = std::max(1, maxBlockSize);
+    momentaryWindow.allocate((int)std::ceil(sampleRate * 0.400 / minBlock) + 1);
+    shortTermWindow.allocate((int)std::ceil(sampleRate * 3.000 / minBlock) + 1);
 
     // Gated integration: 100 ms blocks
     gatedBlockSize    = (int)std::round(sampleRate * 0.1);
@@ -121,12 +120,18 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     if (numSamples == 0 || numCh == 0) return;
 
     // ── Apply K-weighting and accumulate mean-square ─────────────────────────
-    // Channel weights per BS.1770: L/R/C = 1.0, LFE = 0, Ls/Rs = 1.41
-    // For stereo we use 1.0 for both channels.
+    // Channel weights per BS.1770-4: L/R/C = 1.0, LFE = 0, Ls/Rs = 1.41
     double blockMeanSquare = 0.0;
 
     for (int ch = 0; ch < numCh; ++ch)
     {
+        // Per-channel weight (BS.1770-4)
+        double weight = 1.0;
+        if (numCh > 4 && ch == 3)       weight = 0.0;   // LFE (5.1 layout: L R C LFE Ls Rs)
+        else if (numCh > 4 && ch >= 4)  weight = 1.41;  // Ls, Rs surround channels
+
+        if (weight == 0.0) continue;
+
         const float* src = buffer.getReadPointer(ch);
 
         double chSum = 0.0;
@@ -140,11 +145,8 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
 
             chSum += (double)s * (double)s;
         }
-        blockMeanSquare += chSum / (double)numSamples;
+        blockMeanSquare += weight * chSum / (double)numSamples;
     }
-
-    // Average across channels (equal weights for stereo)
-    blockMeanSquare /= (double)numCh;
 
     // ── Update sliding windows ────────────────────────────────────────────────
     // We store the mean-square for this block and track how many samples

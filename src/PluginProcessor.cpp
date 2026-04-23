@@ -113,6 +113,12 @@ LufsNormalizerProcessor::createParameterLayout()
         juce::NormalisableRange<float>(1.0f, 50.0f, 0.5f), 5.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
+    // ── Dry/Wet Mix ───────────────────────────────────────────────────────────
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::DRY_WET, "Mix",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")));
+
     return { params.begin(), params.end() };
 }
 
@@ -121,8 +127,9 @@ LufsNormalizerProcessor::LufsNormalizerProcessor()
     : AudioProcessor(BusesProperties()
         .withInput ("Input",  juce::AudioChannelSet::stereo(), true)
         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, nullptr, "Parameters", createParameterLayout())
+      apvts(*this, &undoManager, "Parameters", createParameterLayout())
 {
+    cacheParameterPointers();
 }
 
 // ── prepareToPlay ─────────────────────────────────────────────────────────────
@@ -139,8 +146,8 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
     limiter    .prepare(sampleRate, samplesPerBlock, numCh);
 
     // Apply lookahead setting
-    const bool  laEnabled = apvts.getRawParameterValue(ParamID::LOOKAHEAD_ENABLED)->load() > 0.5f;
-    const float laMs      = apvts.getRawParameterValue(ParamID::LOOKAHEAD_MS)->load();
+    const bool  laEnabled = pLookaheadEnabled->load() > 0.5f;
+    const float laMs      = pLookaheadMs->load();
     gainSmoother.setLookaheadMs(laMs, laEnabled);
 
     // Report latency to host
@@ -170,11 +177,31 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
-    // ── Sync parameters (cheap atomic reads) ─────────────────────────────────
+    // ── Save dry signal for dry/wet mix ───────────────────────────────────────
+    const float wetAmount = pDryWet->load() * 0.01f; // 0..1
+    juce::AudioBuffer<float> dryBuffer;
+    if (wetAmount < 0.999f)
+    {
+        dryBuffer.makeCopyOf(buffer);
+    }
+
+    // ── Sync parameters (cheap atomic reads via cached pointers) ─────────────
     syncDspParameters();
 
+    // ── Sync lookahead at runtime ─────────────────────────────────────────────
+    {
+        const bool  laEnabled = pLookaheadEnabled->load() > 0.5f;
+        const float laMs      = pLookaheadMs->load();
+        gainSmoother.setLookaheadMs(laMs, laEnabled);
+
+        const int newLatency = gainSmoother.getLatencySamples()
+                             + limiter.getLatencySamples();
+        if (newLatency != getLatencySamples())
+            setLatencySamples(newLatency);
+    }
+
     // ── 1. Gate ───────────────────────────────────────────────────────────────
-    if (apvts.getRawParameterValue(ParamID::GATE_ENABLED)->load() > 0.5f)
+    if (pGateEnabled->load() > 0.5f)
     {
         juce::dsp::AudioBlock<float> block(buffer);
         juce::dsp::ProcessContextReplacing<float> context(block);
@@ -191,15 +218,19 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     meter.processBlock(buffer);
 
     // ── 5. Compute leveler gain correction ────────────────────────────────────
-    const bool levelerOn = apvts.getRawParameterValue(ParamID::LEVELER_ENABLED)->load() > 0.5f;
+    const bool levelerOn = pLevelerEnabled->load() > 0.5f;
 
     if (levelerOn)
     {
-        const float targetLufs   = apvts.getRawParameterValue(ParamID::TARGET_LUFS)->load();
+        const float targetLufs   = pTargetLufs->load();
         const float measuredLufs = meter.getShortTermLUFS();
+        const float momLufs      = meter.getMomentaryLUFS();
+        const float gateThresh   = pGateThreshold->load();
 
-        // Guard against silence / unmeasured state
-        if (measuredLufs > -140.0f)
+        // Guard against silence / unmeasured state.
+        // If the momentary signal is below the gate threshold, return gain to 0 dB
+        // to prevent extreme gain build-up during silence.
+        if (measuredLufs > -140.0f && momLufs > gateThresh)
         {
             const float errorDb = targetLufs - measuredLufs;
             gainSmoother.setTargetGainDb(errorDb);
@@ -219,38 +250,83 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     // ── 7. True-peak limiter ──────────────────────────────────────────────────
     limiter.processBlock(buffer);
+
+    // ── 8. Dry/Wet mix ───────────────────────────────────────────────────────
+    if (wetAmount < 0.999f)
+    {
+        const float dryAmount = 1.0f - wetAmount;
+        const int numCh = std::min(buffer.getNumChannels(), dryBuffer.getNumChannels());
+        const int numSamples = buffer.getNumSamples();
+
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            float* wet = buffer.getWritePointer(ch);
+            const float* dry = dryBuffer.getReadPointer(ch);
+            for (int i = 0; i < numSamples; ++i)
+                wet[i] = dry[i] * dryAmount + wet[i] * wetAmount;
+        }
+    }
 }
 
 // ── syncDspParameters ────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::syncDspParameters()
 {
     // Gate
-    gate.setThreshold(apvts.getRawParameterValue(ParamID::GATE_THRESHOLD)->load());
-    gate.setAttack   (apvts.getRawParameterValue(ParamID::GATE_ATTACK)->load());
-    gate.setRelease  (apvts.getRawParameterValue(ParamID::GATE_RELEASE)->load());
+    gate.setThreshold(pGateThreshold->load());
+    gate.setAttack   (pGateAttack->load());
+    gate.setRelease  (pGateRelease->load());
 
     // Expander
-    expander.setEnabled    (apvts.getRawParameterValue(ParamID::EXP_ENABLED)  ->load() > 0.5f);
-    expander.setThresholdDb(apvts.getRawParameterValue(ParamID::EXP_THRESHOLD)->load());
-    expander.setRatio      (apvts.getRawParameterValue(ParamID::EXP_RATIO)    ->load());
-    expander.setAttackMs   (apvts.getRawParameterValue(ParamID::EXP_ATTACK)   ->load());
-    expander.setReleaseMs  (apvts.getRawParameterValue(ParamID::EXP_RELEASE)  ->load());
-    expander.setKneeDb     (apvts.getRawParameterValue(ParamID::EXP_KNEE)     ->load());
+    expander.setEnabled    (pExpEnabled->load()   > 0.5f);
+    expander.setThresholdDb(pExpThreshold->load());
+    expander.setRatio      (pExpRatio->load());
+    expander.setAttackMs   (pExpAttack->load());
+    expander.setReleaseMs  (pExpRelease->load());
+    expander.setKneeDb     (pExpKnee->load());
 
     // AutoGain
-    autoGain.setEnabled    (apvts.getRawParameterValue(ParamID::AUTOGAIN_ENABLED)->load() > 0.5f);
-    autoGain.setTargetRmsDb(apvts.getRawParameterValue(ParamID::AUTOGAIN_TARGET)->load());
-    autoGain.setSpeedMs    (apvts.getRawParameterValue(ParamID::AUTOGAIN_SPEED)->load());
+    autoGain.setEnabled    (pAutoGainEnabled->load() > 0.5f);
+    autoGain.setTargetRmsDb(pAutoGainTarget->load());
+    autoGain.setSpeedMs    (pAutoGainSpeed->load());
+    autoGain.setGateThresholdDb(pGateThreshold->load());
 
     // Gain smoother
-    gainSmoother.setAttackMs (apvts.getRawParameterValue(ParamID::ATTACK_MS) ->load());
-    gainSmoother.setReleaseMs(apvts.getRawParameterValue(ParamID::RELEASE_MS)->load());
-    gainSmoother.setMaxGainDb(apvts.getRawParameterValue(ParamID::MAX_GAIN_DB)->load());
-    gainSmoother.setMinGainDb(-apvts.getRawParameterValue(ParamID::MAX_GAIN_DB)->load());
+    gainSmoother.setAttackMs (pAttackMs->load());
+    gainSmoother.setReleaseMs(pReleaseMs->load());
+    gainSmoother.setMaxGainDb(pMaxGainDb->load());
+    gainSmoother.setMinGainDb(-pMaxGainDb->load());
 
     // Limiter
-    limiter.setEnabled   (apvts.getRawParameterValue(ParamID::LIMITER_ENABLED)->load() > 0.5f);
-    limiter.setCeilingDb (apvts.getRawParameterValue(ParamID::LIMITER_CEILING)->load());
+    limiter.setEnabled   (pLimiterEnabled->load() > 0.5f);
+    limiter.setCeilingDb (pLimiterCeiling->load());
+}
+
+// ── cacheParameterPointers ───────────────────────────────────────────────────
+void LufsNormalizerProcessor::cacheParameterPointers()
+{
+    pGateThreshold   = apvts.getRawParameterValue(ParamID::GATE_THRESHOLD);
+    pGateAttack      = apvts.getRawParameterValue(ParamID::GATE_ATTACK);
+    pGateRelease     = apvts.getRawParameterValue(ParamID::GATE_RELEASE);
+    pGateEnabled     = apvts.getRawParameterValue(ParamID::GATE_ENABLED);
+    pExpEnabled      = apvts.getRawParameterValue(ParamID::EXP_ENABLED);
+    pExpThreshold    = apvts.getRawParameterValue(ParamID::EXP_THRESHOLD);
+    pExpRatio        = apvts.getRawParameterValue(ParamID::EXP_RATIO);
+    pExpAttack       = apvts.getRawParameterValue(ParamID::EXP_ATTACK);
+    pExpRelease      = apvts.getRawParameterValue(ParamID::EXP_RELEASE);
+    pExpKnee         = apvts.getRawParameterValue(ParamID::EXP_KNEE);
+    pAutoGainEnabled = apvts.getRawParameterValue(ParamID::AUTOGAIN_ENABLED);
+    pAutoGainTarget  = apvts.getRawParameterValue(ParamID::AUTOGAIN_TARGET);
+    pAutoGainSpeed   = apvts.getRawParameterValue(ParamID::AUTOGAIN_SPEED);
+    pAttackMs        = apvts.getRawParameterValue(ParamID::ATTACK_MS);
+    pReleaseMs       = apvts.getRawParameterValue(ParamID::RELEASE_MS);
+    pMaxGainDb       = apvts.getRawParameterValue(ParamID::MAX_GAIN_DB);
+    pTargetLufs      = apvts.getRawParameterValue(ParamID::TARGET_LUFS);
+    pLevelerEnabled  = apvts.getRawParameterValue(ParamID::LEVELER_ENABLED);
+    pLimiterEnabled  = apvts.getRawParameterValue(ParamID::LIMITER_ENABLED);
+    pLimiterCeiling  = apvts.getRawParameterValue(ParamID::LIMITER_CEILING);
+    pLookaheadEnabled = apvts.getRawParameterValue(ParamID::LOOKAHEAD_ENABLED);
+    pLookaheadMs     = apvts.getRawParameterValue(ParamID::LOOKAHEAD_MS);
+    pDryWet          = apvts.getRawParameterValue(ParamID::DRY_WET);
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -263,16 +339,28 @@ void LufsNormalizerProcessor::setCurrentProgram(int index)
     if (presetIdx < 0 || presetIdx >= (int)std::size(kPresets)) return;
 
     const auto& p = kPresets[presetIdx];
-    apvts.getParameter(ParamID::TARGET_LUFS)  ->setValueNotifyingHost(
-        apvts.getParameterRange(ParamID::TARGET_LUFS).convertTo0to1(p.targetLufs));
-    apvts.getParameter(ParamID::ATTACK_MS)    ->setValueNotifyingHost(
-        apvts.getParameterRange(ParamID::ATTACK_MS).convertTo0to1(p.attackMs));
-    apvts.getParameter(ParamID::RELEASE_MS)   ->setValueNotifyingHost(
-        apvts.getParameterRange(ParamID::RELEASE_MS).convertTo0to1(p.releaseMs));
-    apvts.getParameter(ParamID::EXP_THRESHOLD)->setValueNotifyingHost(
-        apvts.getParameterRange(ParamID::EXP_THRESHOLD).convertTo0to1(p.expThreshold));
-    apvts.getParameter(ParamID::EXP_RATIO)    ->setValueNotifyingHost(
-        apvts.getParameterRange(ParamID::EXP_RATIO).convertTo0to1(p.expRatio));
+
+    auto setParam = [&](const char* id, float value) {
+        apvts.getParameter(id)->setValueNotifyingHost(
+            apvts.getParameterRange(id).convertTo0to1(value));
+    };
+
+    // Leveler
+    setParam(ParamID::TARGET_LUFS,   p.targetLufs);
+    setParam(ParamID::ATTACK_MS,     p.attackMs);
+    setParam(ParamID::RELEASE_MS,    p.releaseMs);
+    setParam(ParamID::MAX_GAIN_DB,   p.maxGainDb);
+    // Expander
+    setParam(ParamID::EXP_THRESHOLD, p.expThreshold);
+    setParam(ParamID::EXP_RATIO,     p.expRatio);
+    setParam(ParamID::EXP_KNEE,      p.expKnee);
+    // AutoGain
+    setParam(ParamID::AUTOGAIN_TARGET, p.autoGainTarget);
+    setParam(ParamID::AUTOGAIN_SPEED,  p.autoGainSpeed);
+    // Gate
+    setParam(ParamID::GATE_THRESHOLD, p.gateThreshold);
+    // Limiter
+    setParam(ParamID::LIMITER_CEILING, p.limiterCeiling);
 }
 
 const juce::String LufsNormalizerProcessor::getProgramName(int index)
