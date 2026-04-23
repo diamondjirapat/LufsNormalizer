@@ -26,9 +26,9 @@ DarkLookAndFeel::DarkLookAndFeel()
 void DarkLookAndFeel::drawRotarySlider(juce::Graphics& g,
     int x, int y, int width, int height,
     float sliderPos, float startAngle, float endAngle,
-    juce::Slider& slider)
+    juce::Slider& /*slider*/)
 {
-    const float radius = (float)std::min(width, height) * 0.5f - 4.0f;
+    const float radius = (float)std::min(width, height) * 0.5f - 6.0f;
     const float centreX = (float)x + (float)width  * 0.5f;
     const float centreY = (float)y + (float)height * 0.5f;
     const float angle   = startAngle + sliderPos * (endAngle - startAngle);
@@ -37,8 +37,8 @@ void DarkLookAndFeel::drawRotarySlider(juce::Graphics& g,
     juce::Path track;
     track.addCentredArc(centreX, centreY, radius, radius,
                         0.0f, startAngle, endAngle, true);
-    g.setColour(findColour(juce::Slider::rotarySliderOutlineColourId));
-    g.strokePath(track, juce::PathStrokeType(3.0f,
+    g.setColour(findColour(juce::Slider::rotarySliderOutlineColourId).withAlpha(0.3f));
+    g.strokePath(track, juce::PathStrokeType(4.0f,
         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     // Fill arc
@@ -46,23 +46,16 @@ void DarkLookAndFeel::drawRotarySlider(juce::Graphics& g,
     fill.addCentredArc(centreX, centreY, radius, radius,
                        0.0f, startAngle, angle, true);
     g.setColour(findColour(juce::Slider::rotarySliderFillColourId));
-    g.strokePath(fill, juce::PathStrokeType(3.0f,
+    g.strokePath(fill, juce::PathStrokeType(4.0f,
         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    // Knob body
-    const float knobR = radius * 0.65f;
-    g.setColour(juce::Colour(0xff252540));
-    g.fillEllipse(centreX - knobR, centreY - knobR, knobR * 2.0f, knobR * 2.0f);
-
-    g.setColour(juce::Colour(0xff333355));
-    g.drawEllipse(centreX - knobR, centreY - knobR, knobR * 2.0f, knobR * 2.0f, 1.0f);
-
-    // Pointer line
-    const float pointerLen = knobR * 0.7f;
-    const float px = centreX + std::sin(angle) * pointerLen;
-    const float py = centreY - std::cos(angle) * pointerLen;
-    g.setColour(findColour(juce::Slider::thumbColourId));
-    g.drawLine(centreX, centreY, px, py, 2.0f);
+    // Pointer dot
+    const float dotR = 3.5f;
+    const float px = centreX + std::sin(angle) * radius;
+    const float py = centreY - std::cos(angle) * radius;
+    
+    g.setColour(juce::Colours::white);
+    g.fillEllipse(px - dotR, py - dotR, dotR * 2.0f, dotR * 2.0f);
 }
 
 void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
@@ -72,33 +65,30 @@ void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
     const bool on = button.getToggleState();
     const auto bounds = button.getLocalBounds().toFloat();
 
-    // Pill background
-    const float h = bounds.getHeight() * 0.6f;
-    const float w = h * 1.8f;
+    const float h = bounds.getHeight() * 0.45f;
+    const float w = h * 2.0f;
     const float bx = bounds.getX() + 4.0f;
     const float by = bounds.getCentreY() - h * 0.5f;
 
-    g.setColour(on ? juce::Colour(0xff00c8ff) : juce::Colour(0xff333355));
+    g.setColour(on ? juce::Colour(0xff00c8ff).withAlpha(0.8f) : juce::Colour(0xff222233));
     g.fillRoundedRectangle(bx, by, w, h, h * 0.5f);
 
-    // Thumb
-    const float thumbR = h * 0.45f;
-    const float thumbX = on ? bx + w - thumbR * 2.0f - 2.0f : bx + 2.0f;
-    g.setColour(juce::Colours::white);
-    g.fillEllipse(thumbX, by + (h - thumbR * 2.0f) * 0.5f, thumbR * 2.0f, thumbR * 2.0f);
+    const float thumbR = h * 0.6f;
+    const float thumbX = on ? bx + w - thumbR * 2.0f + 1.0f : bx - 1.0f;
+    g.setColour(on ? juce::Colours::white : juce::Colour(0xff888899));
+    g.fillEllipse(thumbX, bounds.getCentreY() - thumbR, thumbR * 2.0f, thumbR * 2.0f);
 
-    // Label
-    g.setFont(juce::Font(11.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(12.0f));
     g.setColour(on ? juce::Colours::white : juce::Colours::grey);
     g.drawText(button.getButtonText(),
-               (int)(bx + w + 6.0f), 0,
-               (int)(bounds.getWidth() - w - 10.0f), (int)bounds.getHeight(),
+               (int)(bx + w + 10.0f), 0,
+               (int)(bounds.getWidth() - w - 14.0f), (int)bounds.getHeight(),
                juce::Justification::centredLeft, false);
 }
 
 juce::Font DarkLookAndFeel::getLabelFont(juce::Label&)
 {
-    return juce::Font(10.0f);
+    return juce::Font(juce::FontOptions(10.0f));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -111,7 +101,7 @@ void LabelledKnob::setup(juce::Component* parent, const juce::String& labelText)
 
     label.setText(labelText, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
-    label.setFont(juce::Font(10.0f));
+    label.setFont(juce::FontOptions(10.0f));
     parent->addAndMakeVisible(label);
 }
 
@@ -142,6 +132,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     attackKnob .setup(this, "Attack");
     releaseKnob.setup(this, "Release");
     maxGainKnob.setup(this, "Max Gain");
+    gateKnob   .setup(this, "Gate");
 
     // ── Expander section ──────────────────────────────────────────────────────
     addAndMakeVisible(expanderToggle);
@@ -182,7 +173,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     for (auto* lbl : { &momentaryLabel, &shortTermLabel, &integratedLabel })
     {
         lbl->setJustificationType(juce::Justification::centred);
-        lbl->setFont(juce::Font(11.0f, juce::Font::bold));
+        lbl->setFont(juce::FontOptions(11.0f).withStyle("Bold"));
         addAndMakeVisible(*lbl);
     }
 
@@ -205,6 +196,7 @@ void LufsNormalizerEditor::buildAttachments()
     attackAtt   = std::make_unique<SliderAttachment>(apvts, ParamID::ATTACK_MS,    attackKnob.slider);
     releaseAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::RELEASE_MS,   releaseKnob.slider);
     maxGainAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::MAX_GAIN_DB,  maxGainKnob.slider);
+    gateAtt     = std::make_unique<SliderAttachment>(apvts, ParamID::GATE_THRESHOLD, gateKnob.slider);
 
     expThreshAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_THRESHOLD, expThreshKnob.slider);
     expRatioAtt   = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_RATIO,     expRatioKnob.slider);
@@ -279,11 +271,12 @@ void LufsNormalizerEditor::layoutComponents()
         // Leveler section
         levelerToggle.setBounds(levelerArea.removeFromTop(22));
         levelerArea.removeFromTop(4);
-        const int knobW = levelerArea.getWidth() / 4;
+        const int knobW = levelerArea.getWidth() / 5;
         targetKnob .setBounds(levelerArea.removeFromLeft(knobW));
         attackKnob .setBounds(levelerArea.removeFromLeft(knobW));
         releaseKnob.setBounds(levelerArea.removeFromLeft(knobW));
-        maxGainKnob.setBounds(levelerArea);
+        maxGainKnob.setBounds(levelerArea.removeFromLeft(knobW));
+        gateKnob   .setBounds(levelerArea);
 
         // Expander section
         expanderToggle.setBounds(expanderArea.removeFromTop(22));
@@ -354,13 +347,13 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     drawSectionBackground(g, lookaheadArea,"Lookahead",     juce::Colour(0xff0d1a0d));
 
     // Plugin title
-    g.setFont(juce::Font(14.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(14.0f).withStyle("Bold"));
     g.setColour(juce::Colour(0xff00c8ff));
     g.drawText("LUFS NORMALIZER",
                getLocalBounds().removeFromTop(28).withTrimmedLeft(200),
                juce::Justification::centredLeft, false);
 
-    g.setFont(juce::Font(9.0f));
+    g.setFont(juce::FontOptions(9.0f));
     g.setColour(juce::Colours::grey);
     g.drawText("v1.0  |  EBU R128",
                getLocalBounds().removeFromTop(28).withTrimmedLeft(360),
@@ -371,14 +364,16 @@ void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
     juce::Rectangle<int> area, const juce::String& title,
     juce::Colour colour) const
 {
-    g.setColour(colour.withAlpha(0.6f));
-    g.fillRoundedRectangle(area.toFloat(), 6.0f);
-    g.setColour(juce::Colours::grey.withAlpha(0.3f));
-    g.drawRoundedRectangle(area.toFloat(), 6.0f, 1.0f);
+    g.setColour(colour.withAlpha(0.25f));
+    g.fillRoundedRectangle(area.toFloat(), 8.0f);
+    
+    // Very subtle border for modern flat aesthetic
+    g.setColour(juce::Colours::white.withAlpha(0.04f));
+    g.drawRoundedRectangle(area.toFloat(), 8.0f, 1.0f);
 
-    g.setFont(juce::Font(9.0f, juce::Font::bold));
-    g.setColour(juce::Colours::grey.withAlpha(0.7f));
-    g.drawText(title, area.withHeight(14), juce::Justification::centredTop, false);
+    g.setFont(juce::FontOptions(11.0f).withStyle("Bold"));
+    g.setColour(juce::Colours::white.withAlpha(0.85f));
+    g.drawText(title, area.withHeight(24).withTrimmedLeft(12), juce::Justification::centredLeft, false);
 }
 
 // ── timerCallback ─────────────────────────────────────────────────────────────

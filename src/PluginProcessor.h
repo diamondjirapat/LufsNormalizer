@@ -16,6 +16,7 @@ namespace ParamID
     inline constexpr const char* ATTACK_MS        = "attackMs";
     inline constexpr const char* RELEASE_MS       = "releaseMs";
     inline constexpr const char* MAX_GAIN_DB      = "maxGainDb";
+    inline constexpr const char* GATE_THRESHOLD   = "gateThreshold";
 
     // Expander
     inline constexpr const char* EXP_ENABLED      = "expEnabled";

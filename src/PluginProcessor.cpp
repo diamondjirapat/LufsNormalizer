@@ -33,6 +33,11 @@ LufsNormalizerProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 36.0f, 0.1f), 24.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::GATE_THRESHOLD, "Gate",
+        juce::NormalisableRange<float>(-100.0f, 0.0f, 0.1f), -60.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")));
+
     // ── Expander ──────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         ParamID::EXP_ENABLED, "Expander On", true));
@@ -148,12 +153,18 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     {
         const float targetLufs  = apvts.getRawParameterValue(ParamID::TARGET_LUFS)->load();
         const float measuredLufs = meter.getShortTermLUFS(); // use short-term for stability
+        const float gateThreshold = apvts.getRawParameterValue(ParamID::GATE_THRESHOLD)->load();
 
         // Guard against silence / unmeasured state
-        if (measuredLufs > -140.0f)
+        if (measuredLufs > gateThreshold && measuredLufs > -140.0f)
         {
             const float errorDb = targetLufs - measuredLufs;
             gainSmoother.setTargetGainDb(errorDb);
+        }
+        else
+        {
+            // Below threshold, treat as silence -> target 0dB
+            gainSmoother.setTargetGainDb(0.0f);
         }
     }
     else

@@ -62,6 +62,7 @@ private:
     LabelledKnob       attackKnob;
     LabelledKnob       releaseKnob;
     LabelledKnob       maxGainKnob;
+    LabelledKnob       gateKnob;
 
     // ── Expander section ──────────────────────────────────────────────────────
     juce::ToggleButton expanderToggle { "Expander" };
@@ -93,7 +94,7 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt;
+    std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt, gateAtt;
     std::unique_ptr<SliderAttachment> expThreshAtt, expRatioAtt, expAttackAtt,
                                       expReleaseAtt, expKneeAtt;
     std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt;
