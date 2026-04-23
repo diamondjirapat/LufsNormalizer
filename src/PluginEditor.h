@@ -56,13 +56,23 @@ private:
     GainReductionMeter grMeter;
     LevelHistory       levelHistory;
 
+    // ── Gate section ──────────────────────────────────────────────────────────
+    juce::ToggleButton gateToggle { "Gate" };
+    LabelledKnob       gateKnob;
+    LabelledKnob       gateAttackKnob;
+    LabelledKnob       gateReleaseKnob;
+
     // ── LUFS Leveler section ──────────────────────────────────────────────────
     juce::ToggleButton levelerToggle { "Leveler" };
     LabelledKnob       targetKnob;
     LabelledKnob       attackKnob;
     LabelledKnob       releaseKnob;
     LabelledKnob       maxGainKnob;
-    LabelledKnob       gateKnob;
+
+    // ── AutoGain section ──────────────────────────────────────────────────────
+    juce::ToggleButton autoGainToggle { "AutoGain" };
+    LabelledKnob       autoGainTargetKnob;
+    LabelledKnob       autoGainSpeedKnob;
 
     // ── Expander section ──────────────────────────────────────────────────────
     juce::ToggleButton expanderToggle { "Expander" };
@@ -94,12 +104,14 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt, gateAtt;
+    std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt;
+    std::unique_ptr<SliderAttachment> gateAtt, gateAttackAtt, gateReleaseAtt;
+    std::unique_ptr<SliderAttachment> autoGainTargetAtt, autoGainSpeedAtt;
     std::unique_ptr<SliderAttachment> expThreshAtt, expRatioAtt, expAttackAtt,
                                       expReleaseAtt, expKneeAtt;
     std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt;
-    std::unique_ptr<ButtonAttachment> levelerOnAtt, expanderOnAtt,
-                                      limiterOnAtt, lookaheadOnAtt;
+    std::unique_ptr<ButtonAttachment> gateOnAtt, autoGainOnAtt, levelerOnAtt, 
+                                      expanderOnAtt, limiterOnAtt, lookaheadOnAtt;
 
     // ── Timer ─────────────────────────────────────────────────────────────────
     void timerCallback() override;

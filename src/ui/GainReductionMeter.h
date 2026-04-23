@@ -14,6 +14,7 @@ public:
     void setExpanderGR(float dB)  noexcept { expanderGR.store(dB);  }
     void setLimiterGR (float dB)  noexcept { limiterGR .store(dB);  }
     void setLevelerGain(float dB) noexcept { levelerGain.store(dB); }
+    void setAutoGain(float dB)    noexcept { autoGainDb.store(dB);  }
 
     void paint(juce::Graphics& g) override;
 
@@ -23,6 +24,7 @@ private:
     std::atomic<float> expanderGR  { 0.0f };
     std::atomic<float> limiterGR   { 0.0f };
     std::atomic<float> levelerGain { 0.0f };
+    std::atomic<float> autoGainDb  { 0.0f };
 
     float grToWidth(float grDb, float totalWidth) const noexcept;
 };

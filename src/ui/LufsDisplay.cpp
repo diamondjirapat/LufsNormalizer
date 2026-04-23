@@ -33,7 +33,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     const float y = (float)meterArea.getY();
 
     // ── Background ────────────────────────────────────────────────────────────
-    g.setColour(juce::Colour(0xff1a1a2e));
+    g.setColour(juce::Colour(0xff1c1d24)); // lighter panel grey
     g.fillRoundedRectangle(meterArea.toFloat(), 4.0f);
 
     // ── Colour gradient zones ─────────────────────────────────────────────────
@@ -44,13 +44,13 @@ void LufsDisplay::paint(juce::Graphics& g)
     const float greenTop = y + lufsToY(-10.0f, h);
     const float yellowTop = targetY - 2.0f;
 
-    g.setColour(juce::Colour(0xff2d4a2d));
+    g.setColour(juce::Colour(0xff2d4a2d).withAlpha(0.3f));
     g.fillRect(x, greenTop, w, h - (greenTop - y));
 
-    g.setColour(juce::Colour(0xff4a4a1a));
+    g.setColour(juce::Colour(0xff4a4a1a).withAlpha(0.3f));
     g.fillRect(x, yellowTop, w, greenTop - yellowTop);
 
-    g.setColour(juce::Colour(0xff4a1a1a));
+    g.setColour(juce::Colour(0xff4a1a1a).withAlpha(0.3f));
     g.fillRect(x, y, w, yellowTop - y);
 
     // ── Short-term bar (wider, semi-transparent) ──────────────────────────────
@@ -59,7 +59,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     {
         const float barTop = y + lufsToY(stLufs, h);
         const float barH   = h - (barTop - y);
-        g.setColour(juce::Colour(0x8800c8ff));
+        g.setColour(juce::Colour(0x8800d4ff));
         g.fillRect(x, barTop, w, barH);
     }
 
@@ -69,7 +69,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     {
         const float barTop = y + lufsToY(momLufs, h);
         const float barH   = h - (barTop - y);
-        g.setColour(juce::Colour(0xcc00ff88));
+        g.setColour(juce::Colour(0xcc2ecc71));
         g.fillRect(x + w * 0.3f, barTop, w * 0.4f, barH);
     }
 
@@ -110,17 +110,15 @@ void LufsDisplay::paint(juce::Graphics& g)
         g.setColour(juce::Colours::lightgrey);
     }
 
-    // ── Border ────────────────────────────────────────────────────────────────
-    g.setColour(juce::Colours::grey.withAlpha(0.5f));
-    g.drawRoundedRectangle(meterArea.toFloat(), 4.0f, 1.0f);
+    // Border handled by parent
 
     // ── Labels ────────────────────────────────────────────────────────────────
-    g.setFont(juce::Font(8.0f, juce::Font::bold));
-    g.setColour(juce::Colour(0xff00c8ff).withAlpha(0.8f));
-    g.drawText("ST", (int)x, (int)(y + h - 12.0f), 14, 10,
+    g.setFont(juce::FontOptions(9.0f).withStyle("Bold"));
+    g.setColour(juce::Colour(0xff00d4ff));
+    g.drawText("ST", (int)x, (int)(y + h - 14.0f), 14, 12,
                juce::Justification::left, false);
 
-    g.setColour(juce::Colour(0xff00ff88).withAlpha(0.8f));
-    g.drawText("M", (int)(x + w * 0.3f), (int)(y + h - 12.0f), 14, 10,
+    g.setColour(juce::Colour(0xff2ecc71));
+    g.drawText("M", (int)(x + w * 0.3f), (int)(y + h - 14.0f), 14, 12,
                juce::Justification::left, false);
 }

@@ -9,34 +9,24 @@ LufsNormalizerProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // ── LUFS Leveler ──────────────────────────────────────────────────────────
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::TARGET_LUFS, "Target LUFS",
-        juce::NormalisableRange<float>(-36.0f, -6.0f, 0.1f), -16.0f,
-        juce::AudioParameterFloatAttributes().withLabel("LUFS")));
-
+    // ── Gate ──────────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        ParamID::LEVELER_ENABLED, "Leveler On", true));
+        ParamID::GATE_ENABLED, "Gate On", true));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::ATTACK_MS, "Leveler Attack",
-        juce::NormalisableRange<float>(10.0f, 2000.0f, 1.0f, 0.4f), 200.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::RELEASE_MS, "Leveler Release",
-        juce::NormalisableRange<float>(50.0f, 5000.0f, 1.0f, 0.4f), 500.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::MAX_GAIN_DB, "Max Gain",
-        juce::NormalisableRange<float>(0.0f, 36.0f, 0.1f), 24.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::GATE_THRESHOLD, "Gate",
+        ParamID::GATE_THRESHOLD, "Gate Thresh",
         juce::NormalisableRange<float>(-100.0f, 0.0f, 0.1f), -60.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::GATE_ATTACK, "Gate Attack",
+        juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.5f), 5.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::GATE_RELEASE, "Gate Release",
+        juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     // ── Expander ──────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -65,6 +55,44 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::EXP_KNEE, "Exp Knee",
         juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 6.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")));
+
+    // ── AutoGain ──────────────────────────────────────────────────────────────
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamID::AUTOGAIN_ENABLED, "AutoGain On", true));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::AUTOGAIN_TARGET, "AutoGain Target",
+        juce::NormalisableRange<float>(-36.0f, 0.0f, 0.1f), -18.0f,
+        juce::AudioParameterFloatAttributes().withLabel("RMS")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::AUTOGAIN_SPEED, "AutoGain Speed",
+        juce::NormalisableRange<float>(100.0f, 5000.0f, 1.0f, 0.4f), 1000.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    // ── LUFS Leveler ──────────────────────────────────────────────────────────
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::TARGET_LUFS, "Target LUFS",
+        juce::NormalisableRange<float>(-36.0f, -6.0f, 0.1f), -16.0f,
+        juce::AudioParameterFloatAttributes().withLabel("LUFS")));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamID::LEVELER_ENABLED, "Leveler On", true));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::ATTACK_MS, "Leveler Attack",
+        juce::NormalisableRange<float>(10.0f, 2000.0f, 1.0f, 0.4f), 200.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::RELEASE_MS, "Leveler Release",
+        juce::NormalisableRange<float>(50.0f, 5000.0f, 1.0f, 0.4f), 500.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::MAX_GAIN_DB, "Max Gain",
+        juce::NormalisableRange<float>(0.0f, 36.0f, 0.1f), 24.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
     // ── True-peak limiter ─────────────────────────────────────────────────────
@@ -102,8 +130,11 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 {
     const int numCh = getTotalNumInputChannels();
 
-    meter      .prepare(sampleRate, samplesPerBlock, numCh);
+    juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, (juce::uint32)numCh };
+    gate       .prepare(spec);
     expander   .prepare(sampleRate, samplesPerBlock, numCh);
+    autoGain   .prepare(sampleRate, samplesPerBlock, numCh);
+    meter      .prepare(sampleRate, samplesPerBlock, numCh);
     gainSmoother.prepare(sampleRate, samplesPerBlock, numCh);
     limiter    .prepare(sampleRate, samplesPerBlock, numCh);
 
@@ -121,8 +152,10 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 
 void LufsNormalizerProcessor::releaseResources()
 {
-    meter.reset();
+    gate.reset();
     expander.reset();
+    autoGain.reset();
+    meter.reset();
     gainSmoother.reset();
     limiter.reset();
 }
@@ -140,30 +173,39 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // ── Sync parameters (cheap atomic reads) ─────────────────────────────────
     syncDspParameters();
 
-    // ── 1. Expander ───────────────────────────────────────────────────────────
+    // ── 1. Gate ───────────────────────────────────────────────────────────────
+    if (apvts.getRawParameterValue(ParamID::GATE_ENABLED)->load() > 0.5f)
+    {
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        gate.process(context);
+    }
+
+    // ── 2. Expander ───────────────────────────────────────────────────────────
     expander.processBlock(buffer);
 
-    // ── 2. LUFS measurement (on expanded signal) ──────────────────────────────
+    // ── 3. AutoGain ───────────────────────────────────────────────────────────
+    autoGain.processBlock(buffer);
+
+    // ── 4. LUFS measurement (on signal after autogain) ────────────────────────
     meter.processBlock(buffer);
 
-    // ── 3. Compute gain correction ────────────────────────────────────────────
+    // ── 5. Compute leveler gain correction ────────────────────────────────────
     const bool levelerOn = apvts.getRawParameterValue(ParamID::LEVELER_ENABLED)->load() > 0.5f;
 
     if (levelerOn)
     {
-        const float targetLufs  = apvts.getRawParameterValue(ParamID::TARGET_LUFS)->load();
-        const float measuredLufs = meter.getShortTermLUFS(); // use short-term for stability
-        const float gateThreshold = apvts.getRawParameterValue(ParamID::GATE_THRESHOLD)->load();
+        const float targetLufs   = apvts.getRawParameterValue(ParamID::TARGET_LUFS)->load();
+        const float measuredLufs = meter.getShortTermLUFS();
 
         // Guard against silence / unmeasured state
-        if (measuredLufs > gateThreshold && measuredLufs > -140.0f)
+        if (measuredLufs > -140.0f)
         {
             const float errorDb = targetLufs - measuredLufs;
             gainSmoother.setTargetGainDb(errorDb);
         }
         else
         {
-            // Below threshold, treat as silence -> target 0dB
             gainSmoother.setTargetGainDb(0.0f);
         }
     }
@@ -172,16 +214,21 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         gainSmoother.setTargetGainDb(0.0f);
     }
 
-    // ── 4. Apply smoothed gain ────────────────────────────────────────────────
+    // ── 6. Apply smoothed gain ────────────────────────────────────────────────
     gainSmoother.processBlock(buffer);
 
-    // ── 5. True-peak limiter ──────────────────────────────────────────────────
+    // ── 7. True-peak limiter ──────────────────────────────────────────────────
     limiter.processBlock(buffer);
 }
 
 // ── syncDspParameters ────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::syncDspParameters()
 {
+    // Gate
+    gate.setThreshold(apvts.getRawParameterValue(ParamID::GATE_THRESHOLD)->load());
+    gate.setAttack   (apvts.getRawParameterValue(ParamID::GATE_ATTACK)->load());
+    gate.setRelease  (apvts.getRawParameterValue(ParamID::GATE_RELEASE)->load());
+
     // Expander
     expander.setEnabled    (apvts.getRawParameterValue(ParamID::EXP_ENABLED)  ->load() > 0.5f);
     expander.setThresholdDb(apvts.getRawParameterValue(ParamID::EXP_THRESHOLD)->load());
@@ -189,6 +236,11 @@ void LufsNormalizerProcessor::syncDspParameters()
     expander.setAttackMs   (apvts.getRawParameterValue(ParamID::EXP_ATTACK)   ->load());
     expander.setReleaseMs  (apvts.getRawParameterValue(ParamID::EXP_RELEASE)  ->load());
     expander.setKneeDb     (apvts.getRawParameterValue(ParamID::EXP_KNEE)     ->load());
+
+    // AutoGain
+    autoGain.setEnabled    (apvts.getRawParameterValue(ParamID::AUTOGAIN_ENABLED)->load() > 0.5f);
+    autoGain.setTargetRmsDb(apvts.getRawParameterValue(ParamID::AUTOGAIN_TARGET)->load());
+    autoGain.setSpeedMs    (apvts.getRawParameterValue(ParamID::AUTOGAIN_SPEED)->load());
 
     // Gain smoother
     gainSmoother.setAttackMs (apvts.getRawParameterValue(ParamID::ATTACK_MS) ->load());

@@ -30,9 +30,8 @@ void LevelHistory::paint(juce::Graphics& g)
     const float x = bounds.getX();
     const float y = bounds.getY();
 
-    // ── Background ────────────────────────────────────────────────────────────
-    g.setColour(juce::Colour(0xff12121f));
-    g.fillRoundedRectangle(bounds, 4.0f);
+    // The background is handled by the parent panel now, 
+    // but we can add a very faint inner grid or just let it be transparent.
 
     if (history.empty())
     {
@@ -44,8 +43,8 @@ void LevelHistory::paint(juce::Graphics& g)
 
     // ── Target line ───────────────────────────────────────────────────────────
     const float targetY = y + lufsToY(targetLUFS, h);
-    g.setColour(juce::Colour(0x44ffcc00));
-    g.fillRect(x, targetY - 1.0f, w, 2.0f);
+    g.setColour(juce::Colour(0xffff9900).withAlpha(0.6f));
+    g.drawLine(x, targetY, x + w, targetY, 1.5f);
 
     // ── History path ─────────────────────────────────────────────────────────
     juce::Path path;
@@ -68,12 +67,12 @@ void LevelHistory::paint(juce::Graphics& g)
     filled.lineTo(x, y + h);
     filled.closeSubPath();
 
-    g.setColour(juce::Colour(0x2200c8ff));
+    g.setColour(juce::Colour(0xff00d4ff).withAlpha(0.15f));
     g.fillPath(filled);
 
     // Stroke
-    g.setColour(juce::Colour(0xff00c8ff));
-    g.strokePath(path, juce::PathStrokeType(1.5f));
+    g.setColour(juce::Colour(0xff00d4ff));
+    g.strokePath(path, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved));
 
     // ── Scale labels ─────────────────────────────────────────────────────────
     g.setFont(juce::Font(8.0f));
@@ -89,7 +88,5 @@ void LevelHistory::paint(juce::Graphics& g)
         g.setColour(juce::Colours::grey);
     }
 
-    // ── Border ────────────────────────────────────────────────────────────────
-    g.setColour(juce::Colours::grey.withAlpha(0.4f));
-    g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
+    // Border is handled by parent panel.
 }

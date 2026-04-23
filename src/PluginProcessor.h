@@ -4,6 +4,7 @@
 
 #include "dsp/LufsMeter.h"
 #include "dsp/Expander.h"
+#include "dsp/AutoGain.h"
 #include "dsp/GainSmoother.h"
 #include "dsp/TruePeakLimiter.h"
 
@@ -16,7 +17,17 @@ namespace ParamID
     inline constexpr const char* ATTACK_MS        = "attackMs";
     inline constexpr const char* RELEASE_MS       = "releaseMs";
     inline constexpr const char* MAX_GAIN_DB      = "maxGainDb";
+
+    // Gate
+    inline constexpr const char* GATE_ENABLED     = "gateEnabled";
     inline constexpr const char* GATE_THRESHOLD   = "gateThreshold";
+    inline constexpr const char* GATE_ATTACK      = "gateAttack";
+    inline constexpr const char* GATE_RELEASE     = "gateRelease";
+
+    // AutoGain
+    inline constexpr const char* AUTOGAIN_ENABLED = "autoGainEnabled";
+    inline constexpr const char* AUTOGAIN_TARGET  = "autoGainTarget";
+    inline constexpr const char* AUTOGAIN_SPEED   = "autoGainSpeed";
 
     // Expander
     inline constexpr const char* EXP_ENABLED      = "expEnabled";
@@ -91,6 +102,7 @@ public:
     float getIntegratedLUFS() const noexcept { return meter.getIntegratedLUFS(); }
 
     float getLevelerGainDb()  const noexcept { return gainSmoother.getCurrentGainDb(); }
+    float getAutoGainDb()     const noexcept { return autoGain.getCurrentGainDb(); }
     float getExpanderGrDb()   const noexcept { return expander.getGainReductionDb();   }
     float getLimiterGrDb()    const noexcept { return limiter.getGainReductionDb();     }
 
@@ -102,8 +114,10 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     // ── DSP chain ─────────────────────────────────────────────────────────────
-    LufsMeter      meter;
+    juce::dsp::NoiseGate<float> gate;
     Expander       expander;
+    AutoGain       autoGain;
+    LufsMeter      meter;
     GainSmoother   gainSmoother;
     TruePeakLimiter limiter;
 

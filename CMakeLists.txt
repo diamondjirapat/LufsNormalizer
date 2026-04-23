@@ -29,7 +29,7 @@ juce_add_plugin(LufsNormalizer
     PLUGIN_MANUFACTURER_CODE Yrcm
     PLUGIN_CODE             Lnrm
     FORMATS                 VST3 Standalone
-    PRODUCT_NAME            "LUFS Normalizer"
+    PRODUCT_NAME            "FS Master"
     IS_SYNTH                FALSE
     NEEDS_MIDI_INPUT        FALSE
     NEEDS_MIDI_OUTPUT       FALSE
@@ -45,6 +45,7 @@ target_sources(LufsNormalizer PRIVATE
     src/PluginEditor.cpp
     src/dsp/LufsMeter.cpp
     src/dsp/Expander.cpp
+    src/dsp/AutoGain.cpp
     src/dsp/GainSmoother.cpp
     src/dsp/TruePeakLimiter.cpp
     src/ui/LufsDisplay.cpp
