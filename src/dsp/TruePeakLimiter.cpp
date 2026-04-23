@@ -43,6 +43,16 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
     const float ceiling  = std::pow(10.0f, ceilingDb.load() / 20.0f);
 
+    // ── Store original input to lookahead buffer ──────────────────────────────
+    const int bufLen = lookaheadBuffer.getNumSamples();
+    int tempWritePos = writePos;
+    for (int i = 0; i < numSamples; ++i)
+    {
+        for (int ch = 0; ch < numCh; ++ch)
+            lookaheadBuffer.setSample(ch, tempWritePos, buffer.getSample(ch, i));
+        tempWritePos = (tempWritePos + 1) % bufLen;
+    }
+
     // ── Upsample to detect true peaks ────────────────────────────────────────
     juce::dsp::AudioBlock<float> block(buffer);
     auto upBlock = oversampling->processSamplesUp(block);
@@ -70,16 +80,17 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     smoothedGain = coeff * smoothedGain + (1.0f - coeff) * targetGain;
     smoothedGain = std::min(smoothedGain, 1.0f); // never amplify
 
-    // ── Apply gain via lookahead buffer ───────────────────────────────────────
-    const int bufLen = lookaheadBuffer.getNumSamples();
+    // Flush oversampling state. This will overwrite `buffer`, which is fine 
+    // because we have the original samples in the lookahead buffer.
+    oversampling->processSamplesDown(block);
 
+    // ── Apply gain via lookahead buffer ───────────────────────────────────────
     for (int i = 0; i < numSamples; ++i)
     {
         const int readPos = (writePos - lookaheadSamples + bufLen) % bufLen;
 
         for (int ch = 0; ch < numCh; ++ch)
         {
-            lookaheadBuffer.setSample(ch, writePos, buffer.getSample(ch, i));
             buffer.setSample(ch, i, lookaheadBuffer.getSample(ch, readPos) * smoothedGain);
         }
 

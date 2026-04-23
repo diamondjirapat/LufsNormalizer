@@ -50,25 +50,40 @@ private:
     // We store per-block mean-square values in a ring buffer and sum them.
     struct Window
     {
-        std::deque<double> blocks;   // mean-square per block
-        double             sum  = 0.0;
-        int                maxBlocks = 1;
+        std::vector<double> blocks;
+        double              sum = 0.0;
+        int                 maxBlocks = 1;
+        int                 writeIndex = 0;
+        int                 count = 0;
+
+        void allocate(int maxB)
+        {
+            maxBlocks = maxB;
+            blocks.assign((size_t)maxB, 0.0);
+            sum = 0.0;
+            writeIndex = 0;
+            count = 0;
+        }
 
         void push(double ms)
         {
-            blocks.push_back(ms);
+            if (blocks.empty() || maxBlocks == 0) return;
+
+            if (count >= maxBlocks)
+                sum -= blocks[(size_t)writeIndex];
+            else
+                count++;
+
+            blocks[(size_t)writeIndex] = ms;
             sum += ms;
-            while ((int)blocks.size() > maxBlocks)
-            {
-                sum -= blocks.front();
-                blocks.pop_front();
-            }
+            writeIndex = (writeIndex + 1) % maxBlocks;
+
             if (sum < 0.0) sum = 0.0; // guard floating-point drift
         }
 
         double meanSquare() const
         {
-            return blocks.empty() ? 0.0 : sum / (double)blocks.size();
+            return count == 0 ? 0.0 : sum / (double)count;
         }
     };
 
@@ -78,11 +93,9 @@ private:
     // ── Integrated loudness (gated) ──────────────────────────────────────────
     // Pass 1: absolute gate  -70 LUFS
     // Pass 2: relative gate  -10 LU below ungated mean
-    struct GatedBlock
-    {
-        double meanSquare = 0.0;
-    };
-    std::vector<GatedBlock> gatedBlocks;   // 100 ms blocks
+    static constexpr float HISTOGRAM_MIN_LUFS = -70.0f;
+    static constexpr size_t HISTOGRAM_BINS = 900; // -70 to +20 LUFS in 0.1 steps
+    std::array<int, HISTOGRAM_BINS> histogram;
     double                  gatedBlockAccum = 0.0;
     int                     gatedBlockSamples = 0;
     int                     gatedBlockSize    = 0;   // samples per 100 ms

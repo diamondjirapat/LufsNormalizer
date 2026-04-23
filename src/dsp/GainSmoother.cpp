@@ -62,7 +62,7 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             // Smooth gain
             const float coeff = (targetGainDb_ > smoothedGainDb) ? attCoeff : relCoeff;
             smoothedGainDb = coeff * smoothedGainDb + (1.0f - coeff) * targetGainDb_;
-            const float linGain = std::pow(10.0f, smoothedGainDb / 20.0f);
+            const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
 
             // Write current sample into delay buffer, read delayed sample
             const int readPos = (delayWritePos - lookaheadSamples + bufLen) % bufLen;
@@ -84,7 +84,7 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             // Attack when gain needs to increase, release when decreasing
             const float coeff = (targetGainDb_ > smoothedGainDb) ? attCoeff : relCoeff;
             smoothedGainDb = coeff * smoothedGainDb + (1.0f - coeff) * targetGainDb_;
-            const float linGain = std::pow(10.0f, smoothedGainDb / 20.0f);
+            const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
 
             for (int ch = 0; ch < numCh; ++ch)
                 buffer.setSample(ch, i, buffer.getSample(ch, i) * linGain);

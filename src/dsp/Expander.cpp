@@ -57,7 +57,7 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
 
         // ── Gain computer ────────────────────────────────────────────────────
         const float inputDb  = (maxRms > 1e-10f)
-                               ? 20.0f * std::log10(maxRms)
+                               ? 6.020599913f * std::log2(maxRms)
                                : -144.0f;
         const float targetGainDb = computeGainDb(inputDb, thresh, rat, knee);
 
@@ -72,7 +72,7 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
         if (smoothedGainDb < maxGrDb) maxGrDb = smoothedGainDb;
 
         // ── Apply gain ───────────────────────────────────────────────────────
-        const float linGain = std::pow(10.0f, smoothedGainDb / 20.0f);
+        const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
         for (int ch = 0; ch < numCh; ++ch)
             buffer.setSample(ch, i, buffer.getSample(ch, i) * linGain);
     }

@@ -80,24 +80,24 @@ void LufsMeter::prepare(double sampleRate, int /*maxBlockSize*/, int numChannels
     // We approximate using 10 ms sub-blocks internally, but here we use
     // the actual block size. For accuracy we track samples per window.
     // Momentary = 400 ms, Short-term = 3000 ms
-    // We'll recalculate block counts dynamically in processBlock.
-    momentaryWindow  = {};
-    shortTermWindow  = {};
+    // We'll recalculate block counts dynamically in processBlock, but allocate max possible.
+    momentaryWindow.allocate((int)std::ceil(sampleRate * 0.400));
+    shortTermWindow.allocate((int)std::ceil(sampleRate * 3.000));
 
     // Gated integration: 100 ms blocks
     gatedBlockSize    = (int)std::round(sampleRate * 0.1);
     gatedBlockAccum   = 0.0;
     gatedBlockSamples = 0;
-    gatedBlocks.clear();
+    histogram.fill(0);
 
     reset();
 }
 
 void LufsMeter::reset()
 {
-    momentaryWindow  = {};
-    shortTermWindow  = {};
-    gatedBlocks.clear();
+    momentaryWindow.allocate(momentaryWindow.maxBlocks);
+    shortTermWindow.allocate(shortTermWindow.maxBlocks);
+    histogram.fill(0);
     gatedBlockAccum   = 0.0;
     gatedBlockSamples = 0;
 
@@ -152,11 +152,12 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     const double blockDuration = (double)numSamples / sampleRate_;
 
     // Recalculate max blocks for each window based on current block size
-    const int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
-    const int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
+    // Prevent exceeding the maximum allocation if the block size gets exceptionally small.
+    int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
+    int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
 
-    momentaryWindow.maxBlocks = momentaryMaxBlocks;
-    shortTermWindow.maxBlocks = shortTermMaxBlocks;
+    momentaryWindow.maxBlocks = std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size());
+    shortTermWindow.maxBlocks = std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size());
 
     momentaryWindow.push(blockMeanSquare);
     shortTermWindow.push(blockMeanSquare);
@@ -172,7 +173,14 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     if (gatedBlockSamples >= gatedBlockSize)
     {
         const double ms = gatedBlockAccum / (double)gatedBlockSamples;
-        gatedBlocks.push_back({ ms });
+        const float lufs = msToLUFS(ms);
+        if (lufs >= HISTOGRAM_MIN_LUFS)
+        {
+            int binIndex = (int)std::round((lufs - HISTOGRAM_MIN_LUFS) / 0.1f);
+            binIndex = std::max(0, std::min(binIndex, (int)HISTOGRAM_BINS - 1));
+            histogram[(size_t)binIndex]++;
+        }
+
         gatedBlockAccum   = 0.0;
         gatedBlockSamples = 0;
         updateIntegrated();
@@ -182,22 +190,19 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
 // ── updateIntegrated ─────────────────────────────────────────────────────────
 void LufsMeter::updateIntegrated()
 {
-    if (gatedBlocks.empty()) return;
 
-    // Absolute gate: -70 LUFS  →  mean-square threshold
-    // LUFS = -0.691 + 10*log10(ms)  →  ms = 10^((LUFS+0.691)/10)
-    constexpr double absGateLUFS = -70.0;
-    const double     absGateMS   = std::pow(10.0, (absGateLUFS + 0.691) / 10.0);
-
-    // Pass 1: collect blocks above absolute gate
+    // Pass 1: find average energy of all blocks >= -70 LUFS
     double sum1 = 0.0;
-    int    cnt1 = 0;
-    for (const auto& b : gatedBlocks)
+    int cnt1 = 0;
+
+    for (size_t i = 0; i < HISTOGRAM_BINS; ++i)
     {
-        if (b.meanSquare >= absGateMS)
+        if (histogram[i] > 0)
         {
-            sum1 += b.meanSquare;
-            ++cnt1;
+            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
+            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
+            sum1 += ms * histogram[i];
+            cnt1 += histogram[i];
         }
     }
 
@@ -208,18 +213,25 @@ void LufsMeter::updateIntegrated()
     }
 
     // Relative gate: -10 LU below ungated mean
-    const double ungatedMean  = sum1 / (double)cnt1;
-    const double relGateMS    = ungatedMean * std::pow(10.0, -10.0 / 10.0);
+    const double ungatedMean = sum1 / (double)cnt1;
+    const double relGateMS = ungatedMean * std::pow(10.0, -10.0 / 10.0);
+    const float relGateLUFS = msToLUFS(relGateMS);
 
-    // Pass 2: collect blocks above relative gate
+    // Pass 2: find average energy above relative gate
     double sum2 = 0.0;
-    int    cnt2 = 0;
-    for (const auto& b : gatedBlocks)
+    int cnt2 = 0;
+
+    int startBin = (int)std::ceil((relGateLUFS - HISTOGRAM_MIN_LUFS) / 0.1f);
+    startBin = std::max(0, std::min(startBin, (int)HISTOGRAM_BINS - 1));
+
+    for (size_t i = (size_t)startBin; i < HISTOGRAM_BINS; ++i)
     {
-        if (b.meanSquare >= absGateMS && b.meanSquare >= relGateMS)
+        if (histogram[i] > 0)
         {
-            sum2 += b.meanSquare;
-            ++cnt2;
+            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
+            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
+            sum2 += ms * histogram[i];
+            cnt2 += histogram[i];
         }
     }
 
