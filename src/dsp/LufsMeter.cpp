@@ -139,10 +139,6 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
         {
             float s = filters[(size_t)ch].preFilter.processSample(src[i]);
             s       = filters[(size_t)ch].rlbFilter.processSample(s);
-
-            // Flush denormals
-            if (std::abs(s) < 1e-15f) s = 0.0f;
-
             chSum += (double)s * (double)s;
         }
         blockMeanSquare += weight * chSum / (double)numSamples;
