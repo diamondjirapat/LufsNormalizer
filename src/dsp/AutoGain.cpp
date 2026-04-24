@@ -42,6 +42,9 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     const int numChannels = buffer.getNumChannels();
     const int numSamples  = buffer.getNumSamples();
 
+    if (numChannels == 0 || numSamples == 0)
+        return;
+
     // Get raw channel pointers for direct access (avoids per-sample bounds checks)
     if ((int)channelPointers.size() < numChannels) channelPointers.resize((size_t)numChannels);
     for (int ch = 0; ch < numChannels; ++ch)
