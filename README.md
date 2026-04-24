@@ -121,7 +121,6 @@ cmake -B build -S . -DJUCE_PATH=/path/to/JUCE -DCMAKE_BUILD_TYPE=Release
 ## Architecture Notes
 
 - **Thread safety**: All DSP parameters use `std::atomic`. No locks in the audio thread.
-- **No allocations in audio thread**: All buffers pre-allocated in `prepareToPlay`.
 - **Denormal protection**: `juce::ScopedNoDenormals` in `processBlock`.
 - **Latency reporting**: Plugin reports lookahead + limiter latency to the host for PDC.
 - **State persistence**: Full parameter state saved/loaded via APVTS XML serialization.
