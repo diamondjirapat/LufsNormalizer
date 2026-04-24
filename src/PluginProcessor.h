@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include <vector>
 
 #include "dsp/LufsMeter.h"
 #include "dsp/Expander.h"
@@ -142,6 +143,7 @@ private:
     // ── State ─────────────────────────────────────────────────────────────────
     int   currentProgram = 0;
     float lastTargetLufs = -16.0f;
+    juce::AudioBuffer<float> dryWetBuffer;
 
     // ── Cached parameter pointers (avoids string lookups per block) ───────────
     std::atomic<float>* pGateThreshold  = nullptr;

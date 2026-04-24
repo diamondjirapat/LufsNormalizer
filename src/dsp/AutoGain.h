@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_dsp/juce_dsp.h>
 #include <atomic>
+#include <vector>
 
 class AutoGain
 {
@@ -33,6 +34,7 @@ private:
     // Smoothing for the applied gain
     float gainMultiplier { 1.0f };
     float smoothCoeff { 0.001f };
+    std::vector<float*> channelPointers;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AutoGain)
 };

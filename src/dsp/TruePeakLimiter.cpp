@@ -6,6 +6,7 @@ void TruePeakLimiter::prepare(double sampleRate, int maxBlockSize, int numChanne
 {
     sampleRate_  = sampleRate;
     numChannels_ = numChannels;
+    perSamplePeak.assign((size_t)maxBlockSize, 0.0f);
 
     // Recreate oversampling with the correct channel count
     oversampling = std::make_unique<juce::dsp::Oversampling<float>>(
@@ -42,6 +43,7 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
     const float ceiling  = std::pow(10.0f, ceilingDb.load() / 20.0f);
+    jassert((int)perSamplePeak.size() >= numSamples);
 
     // ── Store original input to lookahead buffer ──────────────────────────────
     const int bufLen = lookaheadBuffer.getNumSamples();
@@ -61,7 +63,7 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
     // Build a per-original-sample peak table from the oversampled signal
     // Each original sample corresponds to kOversamplingFactor upsampled samples
-    std::vector<float> perSamplePeak((size_t)numSamples, 0.0f);
+    std::fill(perSamplePeak.begin(), perSamplePeak.begin() + numSamples, 0.0f);
 
     for (int ch = 0; ch < numCh; ++ch)
     {

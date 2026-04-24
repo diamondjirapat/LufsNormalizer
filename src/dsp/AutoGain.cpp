@@ -5,6 +5,7 @@
 void AutoGain::prepare(double newSampleRate, int samplesPerBlock, int numChannels)
 {
     sampleRate = newSampleRate;
+    channelPointers.resize((size_t)numChannels);
     
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, (juce::uint32)numChannels };
     
@@ -42,9 +43,9 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     const int numSamples  = buffer.getNumSamples();
 
     // Get raw channel pointers for direct access (avoids per-sample bounds checks)
-    std::vector<float*> channelPtrs((size_t)numChannels);
+    jassert((int)channelPointers.size() >= numChannels);
     for (int ch = 0; ch < numChannels; ++ch)
-        channelPtrs[(size_t)ch] = buffer.getWritePointer(ch);
+        channelPointers[(size_t)ch] = buffer.getWritePointer(ch);
 
     // Process sample by sample
     for (int i = 0; i < numSamples; ++i)
@@ -53,7 +54,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         float sumSq = 0.0f;
         for (int ch = 0; ch < numChannels; ++ch)
         {
-            const float sample = channelPtrs[(size_t)ch][i];
+            const float sample = channelPointers[(size_t)ch][i];
             sumSq += sample * sample;
         }
         float meanSq = sumSq / (float)numChannels;
@@ -82,7 +83,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
 
         // 6. Apply to signal
         for (int ch = 0; ch < numChannels; ++ch)
-            channelPtrs[(size_t)ch][i] *= gainMultiplier;
+            channelPointers[(size_t)ch][i] *= gainMultiplier;
     }
     
     // Store current applied gain in dB for the UI

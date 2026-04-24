@@ -136,6 +136,7 @@ LufsNormalizerProcessor::LufsNormalizerProcessor()
 void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     const int numCh = getTotalNumInputChannels();
+    dryWetBuffer.setSize(numCh, samplesPerBlock, false, false, true);
 
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, (juce::uint32)numCh };
     gate       .prepare(spec);
@@ -159,6 +160,7 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 
 void LufsNormalizerProcessor::releaseResources()
 {
+    dryWetBuffer.setSize(0, 0);
     gate.reset();
     expander.reset();
     autoGain.reset();
@@ -179,10 +181,16 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
     const float wetAmount = pDryWet->load() * 0.01f; // 0..1
-    juce::AudioBuffer<float> dryBuffer;
     if (wetAmount < 0.999f)
     {
-        dryBuffer.makeCopyOf(buffer);
+        const int numCh = buffer.getNumChannels();
+        const int numSamples = buffer.getNumSamples();
+
+        jassert(dryWetBuffer.getNumChannels() >= numCh);
+        jassert(dryWetBuffer.getNumSamples() >= numSamples);
+
+        for (int ch = 0; ch < numCh; ++ch)
+            dryWetBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
     }
 
     // ── Sync parameters (cheap atomic reads via cached pointers) ─────────────
@@ -255,13 +263,13 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (wetAmount < 0.999f)
     {
         const float dryAmount = 1.0f - wetAmount;
-        const int numCh = std::min(buffer.getNumChannels(), dryBuffer.getNumChannels());
+        const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
         const int numSamples = buffer.getNumSamples();
 
         for (int ch = 0; ch < numCh; ++ch)
         {
             float* wet = buffer.getWritePointer(ch);
-            const float* dry = dryBuffer.getReadPointer(ch);
+            const float* dry = dryWetBuffer.getReadPointer(ch);
             for (int i = 0; i < numSamples; ++i)
                 wet[i] = dry[i] * dryAmount + wet[i] * wetAmount;
         }

@@ -2,6 +2,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_dsp/juce_dsp.h>
 #include <atomic>
+#include <vector>
 
 /**
  * True-peak brickwall limiter.
@@ -45,6 +46,7 @@ private:
 
     // Lookahead delay (1 ms)
     juce::AudioBuffer<float> lookaheadBuffer;
+    std::vector<float> perSamplePeak;
     int  lookaheadSamples = 0;
     int  writePos         = 0;
 
