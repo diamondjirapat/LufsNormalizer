@@ -175,16 +175,15 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // Silence any unused output channels
-    for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
-        buffer.clear(ch, 0, buffer.getNumSamples());
-
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
     const float wetAmount = pDryWet->load() * 0.01f; // 0..1
     if (wetAmount < 0.999f)
     {
         const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
         const int numSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
+
+        jassert(dryWetBuffer.getNumChannels() >= buffer.getNumChannels());
+        jassert(dryWetBuffer.getNumSamples() >= buffer.getNumSamples());
 
         for (int ch = 0; ch < numCh; ++ch)
             dryWetBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
