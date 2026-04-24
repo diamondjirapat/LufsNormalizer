@@ -65,18 +65,44 @@ private:
             count = 0;
         }
 
+        void setMaxBlocks(int newMax)
+        {
+            if (newMax == maxBlocks) return;
+            if (newMax <= 0 || newMax > (int)blocks.size()) return;
+
+            double newSum = 0.0;
+            int newCount = std::min(count, newMax);
+            int cap = (int)blocks.size();
+
+            for (int i = 0; i < newCount; ++i)
+            {
+                int idx = (writeIndex - 1 - i + cap) % cap;
+                newSum += blocks[(size_t)idx];
+            }
+
+            sum = newSum;
+            count = newCount;
+            maxBlocks = newMax;
+        }
+
         void push(double ms)
         {
             if (blocks.empty() || maxBlocks == 0) return;
+            int cap = (int)blocks.size();
 
             if (count >= maxBlocks)
-                sum -= blocks[(size_t)writeIndex];
+            {
+                int oldestIdx = (writeIndex - maxBlocks + cap) % cap;
+                sum -= blocks[(size_t)oldestIdx];
+            }
             else
+            {
                 count++;
+            }
 
             blocks[(size_t)writeIndex] = ms;
             sum += ms;
-            writeIndex = (writeIndex + 1) % maxBlocks;
+            writeIndex = (writeIndex + 1) % cap;
 
             if (sum < 0.0) sum = 0.0; // guard floating-point drift
         }

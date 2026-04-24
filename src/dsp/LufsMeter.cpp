@@ -130,7 +130,7 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
         if (numCh > 4 && ch == 3)       weight = 0.0;   // LFE (5.1 layout: L R C LFE Ls Rs)
         else if (numCh > 4 && ch >= 4)  weight = 1.41;  // Ls, Rs surround channels
 
-        if (weight == 0.0) continue;
+        if (weight < 0.001) continue;
 
         const float* src = buffer.getReadPointer(ch);
 
@@ -158,8 +158,8 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
     int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
 
-    momentaryWindow.maxBlocks = std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size());
-    shortTermWindow.maxBlocks = std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size());
+    momentaryWindow.setMaxBlocks(std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size()));
+    shortTermWindow.setMaxBlocks(std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size()));
 
     momentaryWindow.push(blockMeanSquare);
     shortTermWindow.push(blockMeanSquare);
