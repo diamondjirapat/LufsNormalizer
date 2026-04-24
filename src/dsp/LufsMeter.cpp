@@ -1,5 +1,6 @@
 #include "LufsMeter.h"
 #include <cmath>
+#include <array>
 
 // ── Filter coefficient factories ─────────────────────────────────────────────
 // Coefficients from ITU-R BS.1770-4 Annex 1.
@@ -192,6 +193,17 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
 // ── updateIntegrated ─────────────────────────────────────────────────────────
 void LufsMeter::updateIntegrated()
 {
+    // Pre-calculate LUFS-to-Mean-Square lookup table
+    static const auto lufsToMsLut = []()
+    {
+        std::array<double, HISTOGRAM_BINS> table;
+        for (size_t i = 0; i < HISTOGRAM_BINS; ++i)
+        {
+            const double lufs = (double)HISTOGRAM_MIN_LUFS + (double)i * 0.1;
+            table[i] = std::pow(10.0, (lufs + 0.691) / 10.0);
+        }
+        return table;
+    }();
 
     // Pass 1: find average energy of all blocks >= -70 LUFS
     double sum1 = 0.0;
@@ -201,9 +213,8 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
-            sum1 += ms * histogram[i];
+            const double ms = lufsToMsLut[i];
+            sum1 += ms * (double)histogram[i];
             cnt1 += histogram[i];
         }
     }
@@ -230,9 +241,8 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
-            sum2 += ms * histogram[i];
+            const double ms = lufsToMsLut[i];
+            sum2 += ms * (double)histogram[i];
             cnt2 += histogram[i];
         }
     }
