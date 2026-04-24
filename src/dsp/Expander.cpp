@@ -45,16 +45,16 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
     for (int i = 0; i < numSamples; ++i)
     {
         // ── Level detection: max RMS across channels ─────────────────────────
-        float maxRms = 0.0f;
+        float maxRmsSquared = 0.0f;
         for (int ch = 0; ch < numCh; ++ch)
         {
             const float s = buffer.getSample(ch, i);
             // 1-pole IIR on squared signal → RMS
             rmsState[(size_t)ch] = rmsCoeff * rmsState[(size_t)ch]
                                  + (1.0f - rmsCoeff) * s * s;
-            const float rms = std::sqrt(std::max(0.0f, rmsState[(size_t)ch]));
-            maxRms = std::max(maxRms, rms);
+            maxRmsSquared = std::max(maxRmsSquared, std::max(0.0f, rmsState[(size_t)ch]));
         }
+        const float maxRms = std::sqrt(maxRmsSquared);
 
         // ── Gain computer ────────────────────────────────────────────────────
         const float inputDb  = (maxRms > 1e-10f)
