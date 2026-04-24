@@ -19,7 +19,7 @@
 class LufsMeter
 {
 public:
-    LufsMeter() = default;
+    LufsMeter();
 
     /** Call once before playback starts. */
     void prepare(double sampleRate, int maxBlockSize, int numChannels);
@@ -95,7 +95,8 @@ private:
     // Pass 2: relative gate  -10 LU below ungated mean
     static constexpr float HISTOGRAM_MIN_LUFS = -70.0f;
     static constexpr size_t HISTOGRAM_BINS = 900; // -70 to +20 LUFS in 0.1 steps
-    std::array<int, HISTOGRAM_BINS> histogram;
+    std::array<int, HISTOGRAM_BINS> histogram{};
+    std::array<double, HISTOGRAM_BINS> binToMsLookup{};
     double                  gatedBlockAccum = 0.0;
     int                     gatedBlockSamples = 0;
     int                     gatedBlockSize    = 0;   // samples per 100 ms

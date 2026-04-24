@@ -1,6 +1,15 @@
 #include "LufsMeter.h"
 #include <cmath>
 
+LufsMeter::LufsMeter()
+{
+    for (size_t i = 0; i < HISTOGRAM_BINS; ++i)
+    {
+        float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
+        binToMsLookup[i] = std::pow(10.0, (lufs + 0.691) / 10.0);
+    }
+}
+
 // ── Filter coefficient factories ─────────────────────────────────────────────
 // Coefficients from ITU-R BS.1770-4 Annex 1.
 
@@ -201,8 +210,7 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
+            double ms = binToMsLookup[i];
             sum1 += ms * histogram[i];
             cnt1 += histogram[i];
         }
@@ -230,8 +238,7 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
+            double ms = binToMsLookup[i];
             sum2 += ms * histogram[i];
             cnt2 += histogram[i];
         }
