@@ -46,7 +46,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         return;
 
     // Get raw channel pointers for direct access (avoids per-sample bounds checks)
-    jassert((int)channelPointers.size() >= numChannels);
+    if ((int)channelPointers.size() < numChannels) channelPointers.resize((size_t)numChannels);
     for (int ch = 0; ch < numChannels; ++ch)
         channelPointers[(size_t)ch] = buffer.getWritePointer(ch);
 

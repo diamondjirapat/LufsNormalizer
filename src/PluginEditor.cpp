@@ -92,7 +92,7 @@ void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
     g.setColour(juce::Colours::white);
     g.fillEllipse(thumbX, bounds.getCentreY() - thumbR, thumbR * 2.0f, thumbR * 2.0f);
 
-    g.setFont(juce::FontOptions(14.0f).withStyle("Bold"));
+    g.setFont(juce::Font(14.0f).withStyle(juce::Font::bold));
     g.setColour(on ? juce::Colours::white : juce::Colour(0xffa0a5b5));
     g.drawText(button.getButtonText(),
                (int)(bx + w + 8.0f), 0,
@@ -102,7 +102,7 @@ void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
 
 juce::Font DarkLookAndFeel::getLabelFont(juce::Label&)
 {
-    return juce::Font(juce::FontOptions(10.0f));
+    return juce::Font(10.0f);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -115,7 +115,7 @@ void LabelledKnob::setup(juce::Component* parent, const juce::String& labelText)
 
     label.setText(labelText, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
-    label.setFont(juce::FontOptions(10.0f));
+    label.setFont(juce::Font(10.0f));
     parent->addAndMakeVisible(label);
 }
 
@@ -202,7 +202,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     for (auto* lbl : { &momentaryLabel, &shortTermLabel, &integratedLabel })
     {
         lbl->setJustificationType(juce::Justification::centred);
-        lbl->setFont(juce::FontOptions(11.0f).withStyle("Bold"));
+        lbl->setFont(juce::Font(11.0f).withStyle(juce::Font::bold));
         addAndMakeVisible(*lbl);
     }
 
@@ -426,13 +426,13 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     drawSectionBackground(g, lookaheadArea,"",  panelCol);
 
     // Plugin title (Centered in top bar, or right-aligned)
-    g.setFont(juce::FontOptions(16.0f).withStyle("Bold"));
+    g.setFont(juce::Font(16.0f).withStyle(juce::Font::bold));
     g.setColour(juce::Colour(0xff00d4ff));
     g.drawText("LUFS MASTER",
                topBarArea.withTrimmedLeft(280),
                juce::Justification::centredLeft, false);
 
-    g.setFont(juce::FontOptions(11.0f));
+    g.setFont(juce::Font(11.0f));
     g.setColour(juce::Colour(0xff606575));
     g.drawText("v1.0  |  EBU R128",
                topBarArea.withTrimmedLeft(410),
@@ -452,7 +452,7 @@ void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
 
     if (title.isNotEmpty())
     {
-        g.setFont(juce::FontOptions(13.0f).withStyle("Bold"));
+        g.setFont(juce::Font(13.0f).withStyle(juce::Font::bold));
         g.setColour(juce::Colours::white);
         g.drawText(title, area.withHeight(24).withTrimmedLeft(12), juce::Justification::centredLeft, false);
     }
