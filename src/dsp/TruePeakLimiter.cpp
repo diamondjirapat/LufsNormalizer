@@ -40,10 +40,22 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 {
     if (!enabled.load() || !oversampling) return;
 
-    const int numSamples = buffer.getNumSamples();
+    int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
     const float ceiling  = std::pow(10.0f, ceilingDb.load() / 20.0f);
     jassert((int)perSamplePeak.size() >= numSamples);
+
+    // Security fix: limit numSamples to prevent out-of-bounds access
+    if (numSamples > (int)perSamplePeak.size())
+    {
+        const int excess = numSamples - (int)perSamplePeak.size();
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            // Zero out unprocessed excess samples
+            buffer.clear(ch, (int)perSamplePeak.size(), excess);
+        }
+        numSamples = (int)perSamplePeak.size();
+    }
 
     // ── Store original input to lookahead buffer ──────────────────────────────
     const int bufLen = lookaheadBuffer.getNumSamples();
@@ -56,8 +68,9 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     }
 
     // ── Upsample to detect true peaks per-sample ──────────────────────────────
-    juce::dsp::AudioBlock<float> block(buffer);
-    auto upBlock = oversampling->processSamplesUp(block);
+    juce::dsp::AudioBlock<float> fullBlock(buffer);
+    juce::dsp::AudioBlock<float> activeBlock = fullBlock.getSubBlock(0, (size_t)numSamples);
+    auto upBlock = oversampling->processSamplesUp(activeBlock);
 
     const int upSamples = (int)upBlock.getNumSamples();
 
@@ -81,7 +94,7 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
     // Flush oversampling state. This will overwrite `buffer`, which is fine
     // because we have the original samples in the lookahead buffer.
-    oversampling->processSamplesDown(block);
+    oversampling->processSamplesDown(activeBlock);
 
     // ── Apply per-sample smoothed gain via lookahead buffer ───────────────────
     float minGainThisBlock = 1.0f;
