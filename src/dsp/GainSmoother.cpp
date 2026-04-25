@@ -1,6 +1,7 @@
 #include "GainSmoother.h"
 #include "DspUtils.h"
 #include <algorithm>
+#include <vector>
 
 // ── prepare / reset ──────────────────────────────────────────────────────────
 void GainSmoother::prepare(double sampleRate, int maxBlockSize, int numChannels)
@@ -31,9 +32,11 @@ void GainSmoother::reset()
 void GainSmoother::setLookaheadMs(float ms, bool enabled)
 {
     lookaheadEnabled = enabled;
-    lookaheadSamples = enabled
-        ? (int)std::round(sampleRate_ * (double)ms * 0.001)
+    const int maxSamples = std::max(0, delayBuffer.getNumSamples() - 1);
+    const int requestedSamples = enabled
+        ? (int)std::round(sampleRate_ * (double)std::max(0.0f, ms) * 0.001)
         : 0;
+    lookaheadSamples = std::clamp(requestedSamples, 0, maxSamples);
 }
 
 // ── setTargetGainDb ───────────────────────────────────────────────────────────
@@ -49,8 +52,22 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
     const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
 
+    if (numSamples == 0 || numCh == 0)
+    {
+        currentGainDb.store(smoothedGainDb);
+        return;
+    }
+
     const float attCoeff = DspUtils::msToCoeff(attackMs .load(), sampleRate_);
     const float relCoeff = DspUtils::msToCoeff(releaseMs.load(), sampleRate_);
+    std::vector<float*> writePointers((size_t) numCh);
+    std::vector<float*> delayPointers((size_t) numCh);
+
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        writePointers[(size_t) ch] = buffer.getWritePointer(ch);
+        delayPointers[(size_t) ch] = delayBuffer.getWritePointer(ch);
+    }
 
     if (lookaheadEnabled && lookaheadSamples > 0)
     {
@@ -70,8 +87,9 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
 
             for (int ch = 0; ch < numCh; ++ch)
             {
-                delayBuffer.setSample(ch, delayWritePos, buffer.getSample(ch, i));
-                buffer.setSample(ch, i, delayBuffer.getSample(ch, readPos) * linGain);
+                const float input = writePointers[(size_t) ch][i];
+                delayPointers[(size_t) ch][delayWritePos] = input;
+                writePointers[(size_t) ch][i] = delayPointers[(size_t) ch][readPos] * linGain;
             }
 
             delayWritePos = (delayWritePos + 1) % bufLen;
@@ -88,7 +106,7 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
 
             for (int ch = 0; ch < numCh; ++ch)
-                buffer.setSample(ch, i, buffer.getSample(ch, i) * linGain);
+                writePointers[(size_t) ch][i] *= linGain;
         }
     }
 

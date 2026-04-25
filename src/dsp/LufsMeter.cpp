@@ -1,4 +1,5 @@
 #include "LufsMeter.h"
+#include "DspUtils.h"
 #include <cmath>
 
 // ── Filter coefficient factories ─────────────────────────────────────────────
@@ -154,11 +155,11 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
     int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
 
-    momentaryWindow.setMaxBlocks(std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size()));
-    shortTermWindow.setMaxBlocks(std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size()));
+    momentaryWindow.setMaxBlocks(std::min(momentaryMaxBlocks, (int)momentaryWindow.energies.size()));
+    shortTermWindow.setMaxBlocks(std::min(shortTermMaxBlocks, (int)shortTermWindow.energies.size()));
 
-    momentaryWindow.push(blockMeanSquare);
-    shortTermWindow.push(blockMeanSquare);
+    momentaryWindow.push(blockMeanSquare, numSamples);
+    shortTermWindow.push(blockMeanSquare, numSamples);
 
     // ── Publish momentary / short-term ───────────────────────────────────────
     momentaryLUFS .store(msToLUFS(momentaryWindow.meanSquare()));
@@ -245,7 +246,7 @@ void LufsMeter::updateIntegrated()
 // ── msToLUFS ─────────────────────────────────────────────────────────────────
 float LufsMeter::msToLUFS(double ms) noexcept
 {
-    if (ms <= 0.0) return -144.0f;
+    if (ms <= 0.0) return DspUtils::kSilenceDb;
     // BS.1770: L_K = -0.691 + 10 * log10(sum of channel mean-squares)
-    return (float)(-0.691 + 10.0 * std::log10(ms));
+    return -0.691f + DspUtils::powerToDb((float) ms);
 }

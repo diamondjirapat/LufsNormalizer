@@ -2,6 +2,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <atomic>
 #include <cmath>
+#include <algorithm>
 
 /**
  * Smoothed gain compensation stage.
@@ -30,8 +31,8 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer);
 
     // ── Parameters ───────────────────────────────────────────────────────────
-    void setAttackMs (float ms)  noexcept { attackMs .store(ms);  }
-    void setReleaseMs(float ms)  noexcept { releaseMs.store(ms);  }
+    void setAttackMs (float ms)  noexcept { attackMs .store(std::max(0.0f, ms));  }
+    void setReleaseMs(float ms)  noexcept { releaseMs.store(std::max(0.0f, ms));  }
     void setMaxGainDb(float dB)  noexcept { maxGainDb.store(dB);  }
     void setMinGainDb(float dB)  noexcept { minGainDb.store(dB);  }
 

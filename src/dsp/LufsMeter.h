@@ -3,6 +3,7 @@
 #include <array>
 #include <deque>
 #include <atomic>
+#include <cstdint>
 
 /**
  * EBU R128 / ITU-R BS.1770-4 loudness meter.
@@ -50,8 +51,10 @@ private:
     // We store per-block mean-square values in a ring buffer and sum them.
     struct Window
     {
-        std::vector<double> blocks;
-        double              sum = 0.0;
+        std::vector<double> energies;
+        std::vector<int>    samples;
+        double              totalEnergy = 0.0;
+        int64_t             totalSamples = 0;
         int                 maxBlocks = 1;
         int                 writeIndex = 0;
         int                 count = 0;
@@ -59,8 +62,10 @@ private:
         void allocate(int maxB)
         {
             maxBlocks = maxB;
-            blocks.assign((size_t)maxB, 0.0);
-            sum = 0.0;
+            energies.assign((size_t)maxB, 0.0);
+            samples.assign((size_t)maxB, 0);
+            totalEnergy = 0.0;
+            totalSamples = 0;
             writeIndex = 0;
             count = 0;
         }
@@ -68,48 +73,56 @@ private:
         void setMaxBlocks(int newMax)
         {
             if (newMax == maxBlocks) return;
-            if (newMax <= 0 || newMax > (int)blocks.size()) return;
+            if (newMax <= 0 || newMax > (int)energies.size()) return;
 
-            double newSum = 0.0;
+            double newEnergy = 0.0;
+            int64_t newSampleCount = 0;
             int newCount = std::min(count, newMax);
-            int cap = (int)blocks.size();
+            int cap = (int)energies.size();
 
             for (int i = 0; i < newCount; ++i)
             {
                 int idx = (writeIndex - 1 - i + cap) % cap;
-                newSum += blocks[(size_t)idx];
+                newEnergy += energies[(size_t)idx];
+                newSampleCount += samples[(size_t)idx];
             }
 
-            sum = newSum;
+            totalEnergy = newEnergy;
+            totalSamples = newSampleCount;
             count = newCount;
             maxBlocks = newMax;
         }
 
-        void push(double ms)
+        void push(double meanSquare, int numSamples)
         {
-            if (blocks.empty() || maxBlocks == 0) return;
-            int cap = (int)blocks.size();
+            if (energies.empty() || maxBlocks == 0) return;
+            int cap = (int)energies.size();
+            const double energy = meanSquare * (double) numSamples;
 
             if (count >= maxBlocks)
             {
                 int oldestIdx = (writeIndex - maxBlocks + cap) % cap;
-                sum -= blocks[(size_t)oldestIdx];
+                totalEnergy -= energies[(size_t)oldestIdx];
+                totalSamples -= samples[(size_t)oldestIdx];
             }
             else
             {
                 count++;
             }
 
-            blocks[(size_t)writeIndex] = ms;
-            sum += ms;
+            energies[(size_t)writeIndex] = energy;
+            samples[(size_t)writeIndex] = numSamples;
+            totalEnergy += energy;
+            totalSamples += numSamples;
             writeIndex = (writeIndex + 1) % cap;
 
-            if (sum < 0.0) sum = 0.0; // guard floating-point drift
+            if (totalEnergy < 0.0) totalEnergy = 0.0;
+            if (totalSamples < 0) totalSamples = 0;
         }
 
         double meanSquare() const
         {
-            return count == 0 ? 0.0 : sum / (double)count;
+            return totalSamples == 0 ? 0.0 : totalEnergy / (double) totalSamples;
         }
     };
 

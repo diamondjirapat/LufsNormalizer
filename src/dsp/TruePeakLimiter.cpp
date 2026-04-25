@@ -1,4 +1,5 @@
 #include "TruePeakLimiter.h"
+#include "DspUtils.h"
 #include <cmath>
 #include <algorithm>
 
@@ -38,21 +39,39 @@ void TruePeakLimiter::reset()
 
 void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 {
-    if (!enabled.load() || !oversampling) return;
-
     const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
-    const float ceiling  = std::pow(10.0f, ceilingDb.load() / 20.0f);
-    if (numSamples > (int)perSamplePeak.size()) return;
-    jassert((int)perSamplePeak.size() >= numSamples);
+    if (!enabled.load() || !oversampling)
+    {
+        smoothedGain = 1.0f;
+        gainReductionDb.store(0.0f);
+        return;
+    }
+
+    if (numSamples == 0 || numCh == 0)
+    {
+        gainReductionDb.store(0.0f);
+        return;
+    }
+
+    const float ceiling  = DspUtils::dbToGain(ceilingDb.load());
+    if (numSamples > (int)perSamplePeak.size())
+        perSamplePeak.resize((size_t) numSamples, 0.0f);
 
     // ── Store original input to lookahead buffer ──────────────────────────────
     const int bufLen = lookaheadBuffer.getNumSamples();
+    std::vector<float*> inputPointers((size_t) numCh);
+    std::vector<float*> lookaheadPointers((size_t) numCh);
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        inputPointers[(size_t) ch] = buffer.getWritePointer(ch);
+        lookaheadPointers[(size_t) ch] = lookaheadBuffer.getWritePointer(ch);
+    }
     int tempWritePos = writePos;
     for (int i = 0; i < numSamples; ++i)
     {
         for (int ch = 0; ch < numCh; ++ch)
-            lookaheadBuffer.setSample(ch, tempWritePos, buffer.getSample(ch, i));
+            lookaheadPointers[(size_t) ch][tempWritePos] = inputPointers[(size_t) ch][i];
         tempWritePos = (tempWritePos + 1) % bufLen;
     }
 
@@ -106,15 +125,13 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
         for (int ch = 0; ch < numCh; ++ch)
         {
-            buffer.setSample(ch, i, lookaheadBuffer.getSample(ch, readPos) * smoothedGain);
+            inputPointers[(size_t) ch][i] = lookaheadPointers[(size_t) ch][readPos] * smoothedGain;
         }
 
         writePos = (writePos + 1) % bufLen;
     }
 
     // Publish peak gain reduction for this block
-    const float grDb = (minGainThisBlock > 1e-10f)
-                       ? 20.0f * std::log10(minGainThisBlock)
-                       : -144.0f;
+    const float grDb = DspUtils::gainToDb(std::max(minGainThisBlock, DspUtils::kMinLinear));
     gainReductionDb.store(grDb);
 }

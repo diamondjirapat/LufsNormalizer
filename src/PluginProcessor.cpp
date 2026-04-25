@@ -135,7 +135,7 @@ LufsNormalizerProcessor::LufsNormalizerProcessor()
 // ── prepareToPlay ─────────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    const int numCh = getTotalNumInputChannels();
+    const int numCh = std::max(getTotalNumInputChannels(), getTotalNumOutputChannels());
     dryWetBuffer.setSize(numCh, samplesPerBlock, false, false, true);
 
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, (juce::uint32)numCh };
@@ -169,24 +169,45 @@ void LufsNormalizerProcessor::releaseResources()
     limiter.reset();
 }
 
+bool LufsNormalizerProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    const auto input = layouts.getMainInputChannelSet();
+    const auto output = layouts.getMainOutputChannelSet();
+
+    if (input != output)
+        return false;
+
+    return input == juce::AudioChannelSet::mono()
+        || input == juce::AudioChannelSet::stereo();
+}
+
 // ── processBlock ─────────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                             juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
+    const int totalInputs = getTotalNumInputChannels();
+    const int totalOutputs = getTotalNumOutputChannels();
+    const int numSamples = buffer.getNumSamples();
+
+    for (int ch = totalInputs; ch < totalOutputs; ++ch)
+        buffer.clear(ch, 0, numSamples);
+
+    if (numSamples == 0 || totalOutputs == 0)
+        return;
 
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
     const float wetAmount = pDryWet->load() * 0.01f; // 0..1
     if (wetAmount < 0.999f)
     {
         const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
-        const int numSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
+        const int dryWetSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
 
         jassert(dryWetBuffer.getNumChannels() >= buffer.getNumChannels());
         jassert(dryWetBuffer.getNumSamples() >= buffer.getNumSamples());
 
         for (int ch = 0; ch < numCh; ++ch)
-            dryWetBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
+            dryWetBuffer.copyFrom(ch, 0, buffer, ch, 0, dryWetSamples);
     }
 
     // ── Sync parameters (cheap atomic reads via cached pointers) ─────────────
@@ -260,13 +281,13 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     {
         const float dryAmount = 1.0f - wetAmount;
         const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
-        const int numSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
+        const int wetMixSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
 
         for (int ch = 0; ch < numCh; ++ch)
         {
             float* wet = buffer.getWritePointer(ch);
             const float* dry = dryWetBuffer.getReadPointer(ch);
-            for (int i = 0; i < numSamples; ++i)
+            for (int i = 0; i < wetMixSamples; ++i)
                 wet[i] = dry[i] * dryAmount + wet[i] * wetAmount;
         }
     }

@@ -1,4 +1,5 @@
 #include "AutoGain.h"
+#include "DspUtils.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
@@ -15,16 +16,6 @@ inline float fast_log10(float x) {
     y *= 1.1920928955078125e-7f; // 1 / (1 << 23)
     y -= 126.94269504f;
     return y * 0.30102999566f; // log10(2)
-}
-
-// Fast pow10 approximation using IEEE-754 bit manipulation
-// Max relative error is ~3.8%
-inline float fast_pow10(float x) {
-    float y = x * 3.321928094887362f; // x * log2(10)
-    uint32_t vi = (uint32_t)((1 << 23) * (y + 126.94269504f));
-    float v;
-    std::memcpy(&v, &vi, sizeof(vi));
-    return v;
 }
 
 } // namespace
@@ -55,13 +46,16 @@ void AutoGain::reset()
 void AutoGain::setSpeedMs(float speedMs)
 {
     // Convert ms to a 1-pole smoothing coefficient
-    smoothCoeff = 1.0f - std::exp(-1.0f / (speedMs * 0.001f * (float)sampleRate));
+    const float clampedMs = std::max(speedMs, 1.0f);
+    const float safeSampleRate = std::max((float) sampleRate, 1.0f);
+    smoothCoeff = 1.0f - std::exp(-1.0f / (clampedMs * 0.001f * safeSampleRate));
 }
 
 void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
 {
     if (!enabled)
     {
+        gainMultiplier = 1.0f;
         currentGainDb.store(0.0f);
         return;
     }
@@ -122,5 +116,5 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     }
 
     // Store current applied gain in dB for the UI
-    currentGainDb.store(20.0f * std::log10(std::max(gainMultiplier, 1e-5f)));
+    currentGainDb.store(DspUtils::gainToDb(std::max(gainMultiplier, DspUtils::kMinLinear)));
 }
