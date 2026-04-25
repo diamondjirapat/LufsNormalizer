@@ -76,10 +76,10 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     if ((int)channelPointers.size() < numChannels) channelPointers.resize((size_t)numChannels);
     for (int ch = 0; ch < numChannels; ++ch)
         channelPointers[(size_t)ch] = buffer.getWritePointer(ch);
+    const int safeChannels = std::min(numChannels, (int)channelPointers.size());
 
     // Precalculate loop constants for performance
     const float targetRmsLinear = std::pow(10.0f, targetRmsDb / 20.0f);
-    const float gateThresholdSq = std::pow(10.0f, gateThresholdDb / 10.0f);
     const float maxGainMult = std::pow(10.0f, 12.0f / 20.0f);
     const float minGainMult = std::pow(10.0f, -12.0f / 20.0f);
 
@@ -103,7 +103,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         float currentRmsDb = 10.0f * fast_log10(smoothedSq);
 
         // 4. Calculate required gain to hit target
-        float requiredGainDb = 0.0f;
+        float requiredMultiplier = 1.0f;
 
         // If the signal is below the gate threshold, return gain to 0 dB
         if (currentRmsDb > gateThresholdDb)
@@ -114,7 +114,6 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         }
 
         // 5. Smooth the gain multiplier
-        float requiredMultiplier = fast_pow10(requiredGainDb / 20.0f);
         gainMultiplier += smoothCoeff * (requiredMultiplier - gainMultiplier);
 
         // 6. Apply to signal

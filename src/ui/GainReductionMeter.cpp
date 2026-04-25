@@ -53,7 +53,7 @@ void GainReductionMeter::paint(juce::Graphics& g)
         g.fillRect(barX, rowY, barW, rowH);
 
         // Label
-        g.setFont(juce::Font(11.0f).withStyle(juce::Font::bold));
+        g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
         
         juce::String text = name + " (" + juce::String(grDb, 1) + " dB)";
         
@@ -79,7 +79,7 @@ void GainReductionMeter::paint(juce::Graphics& g)
     g.drawLine(x + w * 0.5f, y, x + w * 0.5f, y + h, 1.0f);
 
     // Ticks at the bottom
-    g.setFont(juce::Font(9.0f));
+    g.setFont(juce::Font(juce::FontOptions(9.0f)));
     g.setColour(juce::Colour(0xff606575));
     for (float db = 0.0f; db <= kMaxGR; db += 6.0f)
     {

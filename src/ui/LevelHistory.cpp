@@ -36,7 +36,7 @@ void LevelHistory::paint(juce::Graphics& g)
     if (history.empty())
     {
         g.setColour(juce::Colours::grey.withAlpha(0.4f));
-        g.setFont(juce::Font(11.0f));
+        g.setFont(juce::Font(juce::FontOptions(11.0f)));
         g.drawText("No signal", bounds.toNearestInt(), juce::Justification::centred);
         return;
     }
@@ -75,7 +75,7 @@ void LevelHistory::paint(juce::Graphics& g)
     g.strokePath(path, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved));
 
     // ── Scale labels ─────────────────────────────────────────────────────────
-    g.setFont(juce::Font(8.0f));
+    g.setFont(juce::Font(juce::FontOptions(8.0f)));
     g.setColour(juce::Colours::grey);
     for (float lufs = kMaxLUFS; lufs >= kMinLUFS; lufs -= 10.0f)
     {

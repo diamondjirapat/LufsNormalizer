@@ -81,7 +81,7 @@ void LufsDisplay::paint(juce::Graphics& g)
         g.setColour(juce::Colours::white.withAlpha(0.9f));
         g.fillRect(x, tickY - 1.0f, w, 2.0f);
 
-        g.setFont(juce::Font(9.0f));
+        g.setFont(juce::Font(juce::FontOptions(9.0f)));
         g.setColour(juce::Colours::white);
         g.drawText(juce::String(intLufs, 1) + " I",
                    (int)x, (int)(tickY - 10.0f), (int)w, 10,
@@ -93,7 +93,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     g.drawLine(x, targetY, x + w, targetY, 1.5f);
 
     // ── Scale labels ─────────────────────────────────────────────────────────
-    g.setFont(juce::Font(9.0f));
+    g.setFont(juce::Font(juce::FontOptions(9.0f)));
     g.setColour(juce::Colours::lightgrey);
 
     const float scaleX = (float)getLocalBounds().getX();
@@ -113,7 +113,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     // Border handled by parent
 
     // ── Labels ────────────────────────────────────────────────────────────────
-    g.setFont(juce::Font(9.0f).withStyle(juce::Font::bold));
+    g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
     g.setColour(juce::Colour(0xff00d4ff));
     g.drawText("ST", (int)x, (int)(y + h - 14.0f), 14, 12,
                juce::Justification::left, false);
