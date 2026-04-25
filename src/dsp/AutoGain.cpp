@@ -82,12 +82,12 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     {
         // 1. Calculate squared sum for RMS
         float sumSq = 0.0f;
-        for (int ch = 0; ch < numChannels; ++ch)
+        for (int ch = 0; ch < safeChannels; ++ch)
         {
             const float sample = channelPointers[(size_t)ch][i];
             sumSq += sample * sample;
         }
-        float meanSq = sumSq / (float)numChannels;
+        float meanSq = safeChannels > 0 ? sumSq / (float)safeChannels : 0.0f;
 
         // 2. Filter the mean squared value to get slow changing envelope
         float smoothedSq = rmsFilter.processSample(0, meanSq); // channel 0
@@ -112,7 +112,7 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         gainMultiplier += smoothCoeff * (requiredMultiplier - gainMultiplier);
 
         // 6. Apply to signal
-        for (int ch = 0; ch < numChannels; ++ch)
+        for (int ch = 0; ch < safeChannels; ++ch)
             channelPointers[(size_t)ch][i] *= gainMultiplier;
     }
 
