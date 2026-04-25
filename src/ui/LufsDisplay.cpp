@@ -113,7 +113,7 @@ void LufsDisplay::paint(juce::Graphics& g)
     // Border handled by parent
 
     // ── Labels ────────────────────────────────────────────────────────────────
-    g.setFont(juce::FontOptions(9.0f).withStyle("Bold"));
+    g.setFont(juce::Font(9.0f).withStyle(juce::Font::bold));
     g.setColour(juce::Colour(0xff00d4ff));
     g.drawText("ST", (int)x, (int)(y + h - 14.0f), 14, 12,
                juce::Justification::left, false);
