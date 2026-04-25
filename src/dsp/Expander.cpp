@@ -23,17 +23,32 @@ void Expander::reset()
 // ── processBlock ─────────────────────────────────────────────────────────────
 void Expander::processBlock(juce::AudioBuffer<float>& buffer)
 {
-    if (!enabled.load()) return;
-
     const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
 
+    if (!enabled.load())
+    {
+        smoothedGainDb = 0.0f;
+        gainReductionDb.store(0.0f);
+        return;
+    }
+
+    if (numSamples == 0 || numCh == 0)
+    {
+        gainReductionDb.store(0.0f);
+        return;
+    }
+
+    std::vector<float*> channelPointers((size_t) numCh);
+    for (int ch = 0; ch < numCh; ++ch)
+        channelPointers[(size_t) ch] = buffer.getWritePointer(ch);
+
     // Snapshot parameters (avoid repeated atomic loads in inner loop)
     const float thresh  = thresholdDb.load();
-    const float rat     = ratio.load();
-    const float knee    = kneeDb.load();
-    const float attMs   = attackMs.load();
-    const float relMs   = releaseMs.load();
+    const float rat     = std::max(1.0f, ratio.load());
+    const float knee    = std::max(0.0f, kneeDb.load());
+    const float attMs   = std::max(0.0f, attackMs.load());
+    const float relMs   = std::max(0.0f, releaseMs.load());
 
     // 1-pole RMS detector time constant (~10 ms window)
     const float rmsCoeff    = DspUtils::msToCoeff(10.0f, sampleRate_);
@@ -48,7 +63,7 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
         float maxRmsSquared = 0.0f;
         for (int ch = 0; ch < numCh; ++ch)
         {
-            const float s = buffer.getSample(ch, i);
+            const float s = channelPointers[(size_t) ch][i];
             // 1-pole IIR on squared signal → RMS
             rmsState[(size_t)ch] = rmsCoeff * rmsState[(size_t)ch]
                                  + (1.0f - rmsCoeff) * s * s;
@@ -75,7 +90,7 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
         // ── Apply gain ───────────────────────────────────────────────────────
         const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
         for (int ch = 0; ch < numCh; ++ch)
-            buffer.setSample(ch, i, buffer.getSample(ch, i) * linGain);
+            channelPointers[(size_t) ch][i] *= linGain;
     }
 
     gainReductionDb.store(maxGrDb);
@@ -89,6 +104,17 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
 float Expander::computeGainDb(float inputDb, float thresh,
                                float rat, float knee) const noexcept
 {
+    if (rat <= 1.0f)
+        return 0.0f;
+
+    if (knee <= 0.0f)
+    {
+        if (inputDb >= thresh)
+            return 0.0f;
+
+        return (1.0f / rat - 1.0f) * (thresh - inputDb);
+    }
+
     const float halfKnee = knee * 0.5f;
     const float lower    = thresh - halfKnee;
     const float upper    = thresh + halfKnee;

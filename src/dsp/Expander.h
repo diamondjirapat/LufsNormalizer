@@ -2,6 +2,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_dsp/juce_dsp.h>
 #include <atomic>
+#include <algorithm>
 
 /**
  * Downward expander with soft knee.
@@ -28,10 +29,10 @@ public:
 
     // ── Parameter setters (real-time safe) ───────────────────────────────────
     void setThresholdDb(float dB)    noexcept { thresholdDb.store(dB);    }
-    void setRatio(float r)           noexcept { ratio.store(r);           }
-    void setAttackMs(float ms)       noexcept { attackMs.store(ms);       }
-    void setReleaseMs(float ms)      noexcept { releaseMs.store(ms);      }
-    void setKneeDb(float dB)         noexcept { kneeDb.store(dB);         }
+    void setRatio(float r)           noexcept { ratio.store(std::max(1.0f, r)); }
+    void setAttackMs(float ms)       noexcept { attackMs.store(std::max(0.0f, ms)); }
+    void setReleaseMs(float ms)      noexcept { releaseMs.store(std::max(0.0f, ms)); }
+    void setKneeDb(float dB)         noexcept { kneeDb.store(std::max(0.0f, dB)); }
     void setEnabled(bool e)          noexcept { enabled.store(e);         }
 
     /** Returns the current gain reduction in dB (≤ 0). Thread-safe read. */
