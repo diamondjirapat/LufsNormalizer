@@ -40,22 +40,11 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 {
     if (!enabled.load() || !oversampling) return;
 
-    int numSamples = buffer.getNumSamples();
+    const int numSamples = buffer.getNumSamples();
     const int numCh      = std::min(buffer.getNumChannels(), numChannels_);
     const float ceiling  = std::pow(10.0f, ceilingDb.load() / 20.0f);
+    if (numSamples > (int)perSamplePeak.size()) return;
     jassert((int)perSamplePeak.size() >= numSamples);
-
-    // Security fix: limit numSamples to prevent out-of-bounds access
-    if (numSamples > (int)perSamplePeak.size())
-    {
-        const int excess = numSamples - (int)perSamplePeak.size();
-        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        {
-            // Zero out unprocessed excess samples
-            buffer.clear(ch, (int)perSamplePeak.size(), excess);
-        }
-        numSamples = (int)perSamplePeak.size();
-    }
 
     // ── Store original input to lookahead buffer ──────────────────────────────
     const int bufLen = lookaheadBuffer.getNumSamples();
