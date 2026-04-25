@@ -1,15 +1,6 @@
 #include "LufsMeter.h"
 #include <cmath>
 
-LufsMeter::LufsMeter()
-{
-    for (size_t i = 0; i < HISTOGRAM_BINS; ++i)
-    {
-        float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-        binToMsLookup[i] = std::pow(10.0, (lufs + 0.691) / 10.0);
-    }
-}
-
 // ── Filter coefficient factories ─────────────────────────────────────────────
 // Coefficients from ITU-R BS.1770-4 Annex 1.
 
@@ -139,7 +130,7 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
         if (numCh > 4 && ch == 3)       weight = 0.0;   // LFE (5.1 layout: L R C LFE Ls Rs)
         else if (numCh > 4 && ch >= 4)  weight = 1.41;  // Ls, Rs surround channels
 
-        if (weight == 0.0) continue;
+        if (weight < 0.001) continue;
 
         const float* src = buffer.getReadPointer(ch);
 
@@ -148,10 +139,6 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
         {
             float s = filters[(size_t)ch].preFilter.processSample(src[i]);
             s       = filters[(size_t)ch].rlbFilter.processSample(s);
-
-            // Flush denormals
-            if (std::abs(s) < 1e-15f) s = 0.0f;
-
             chSum += (double)s * (double)s;
         }
         blockMeanSquare += weight * chSum / (double)numSamples;
@@ -167,8 +154,8 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
     int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
 
-    momentaryWindow.maxBlocks = std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size());
-    shortTermWindow.maxBlocks = std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size());
+    momentaryWindow.setMaxBlocks(std::min(momentaryMaxBlocks, (int)momentaryWindow.blocks.size()));
+    shortTermWindow.setMaxBlocks(std::min(shortTermMaxBlocks, (int)shortTermWindow.blocks.size()));
 
     momentaryWindow.push(blockMeanSquare);
     shortTermWindow.push(blockMeanSquare);
@@ -210,7 +197,8 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            double ms = binToMsLookup[i];
+            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
+            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
             sum1 += ms * histogram[i];
             cnt1 += histogram[i];
         }
@@ -238,7 +226,8 @@ void LufsMeter::updateIntegrated()
     {
         if (histogram[i] > 0)
         {
-            double ms = binToMsLookup[i];
+            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
+            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
             sum2 += ms * histogram[i];
             cnt2 += histogram[i];
         }
