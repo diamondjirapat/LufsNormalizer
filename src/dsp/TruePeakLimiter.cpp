@@ -57,8 +57,9 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     }
 
     // ── Upsample to detect true peaks per-sample ──────────────────────────────
-    juce::dsp::AudioBlock<float> block(buffer);
-    auto upBlock = oversampling->processSamplesUp(block);
+    juce::dsp::AudioBlock<float> fullBlock(buffer);
+    juce::dsp::AudioBlock<float> activeBlock = fullBlock.getSubBlock(0, (size_t)numSamples);
+    auto upBlock = oversampling->processSamplesUp(activeBlock);
 
     const int upSamples = (int)upBlock.getNumSamples();
 
@@ -82,7 +83,7 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
     // Flush oversampling state. This will overwrite `buffer`, which is fine
     // because we have the original samples in the lookahead buffer.
-    oversampling->processSamplesDown(block);
+    oversampling->processSamplesDown(activeBlock);
 
     // ── Apply per-sample smoothed gain via lookahead buffer ───────────────────
     float minGainThisBlock = 1.0f;
