@@ -67,9 +67,22 @@ LufsNormalizerProcessor::createParameterLayout()
         juce::AudioParameterFloatAttributes().withLabel("RMS")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::AUTOGAIN_SPEED, "AutoGain Speed",
-        juce::NormalisableRange<float>(100.0f, 5000.0f, 1.0f, 0.4f), 1000.0f,
+        ParamID::AUTOGAIN_ATTACK, "AutoGain Attack",
+        juce::NormalisableRange<float>(10.0f, 5000.0f, 1.0f, 0.4f), 500.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::AUTOGAIN_RELEASE, "AutoGain Release",
+        juce::NormalisableRange<float>(50.0f, 5000.0f, 1.0f, 0.4f), 1000.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::AUTOGAIN_MAXGAIN, "AutoGain Max Gain",
+        juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 12.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamID::AUTOGAIN_REDUCE, "AutoGain Reduce", false));
 
     // ── LUFS Leveler ──────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -196,6 +209,9 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (numSamples == 0 || totalOutputs == 0)
         return;
 
+    // ── Measure input levels (before any processing) ──────────────────────────
+    measureLevels(buffer, inputPeakDb, inputRmsDb);
+
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
     const float wetAmount = pDryWet->load() * 0.01f; // 0..1
     if (wetAmount < 0.999f)
@@ -291,6 +307,9 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 wet[i] = dry[i] * dryAmount + wet[i] * wetAmount;
         }
     }
+
+    // ── Measure output levels (after full processing chain) ───────────────────
+    measureLevels(buffer, outputPeakDb, outputRmsDb);
 }
 
 // ── syncDspParameters ────────────────────────────────────────────────────────
@@ -312,7 +331,10 @@ void LufsNormalizerProcessor::syncDspParameters()
     // AutoGain
     autoGain.setEnabled    (pAutoGainEnabled->load() > 0.5f);
     autoGain.setTargetRmsDb(pAutoGainTarget->load());
-    autoGain.setSpeedMs    (pAutoGainSpeed->load());
+    autoGain.setAttackMs   (pAutoGainAttack->load());
+    autoGain.setReleaseMs  (pAutoGainRelease->load());
+    autoGain.setMaxGainDb  (pAutoGainMaxGain->load());
+    autoGain.setAllowReduce(pAutoGainReduce->load() > 0.5f);
     autoGain.setGateThresholdDb(pGateThreshold->load());
 
     // Gain smoother
@@ -341,7 +363,10 @@ void LufsNormalizerProcessor::cacheParameterPointers()
     pExpKnee         = apvts.getRawParameterValue(ParamID::EXP_KNEE);
     pAutoGainEnabled = apvts.getRawParameterValue(ParamID::AUTOGAIN_ENABLED);
     pAutoGainTarget  = apvts.getRawParameterValue(ParamID::AUTOGAIN_TARGET);
-    pAutoGainSpeed   = apvts.getRawParameterValue(ParamID::AUTOGAIN_SPEED);
+    pAutoGainAttack  = apvts.getRawParameterValue(ParamID::AUTOGAIN_ATTACK);
+    pAutoGainRelease = apvts.getRawParameterValue(ParamID::AUTOGAIN_RELEASE);
+    pAutoGainMaxGain = apvts.getRawParameterValue(ParamID::AUTOGAIN_MAXGAIN);
+    pAutoGainReduce  = apvts.getRawParameterValue(ParamID::AUTOGAIN_REDUCE);
     pAttackMs        = apvts.getRawParameterValue(ParamID::ATTACK_MS);
     pReleaseMs       = apvts.getRawParameterValue(ParamID::RELEASE_MS);
     pMaxGainDb       = apvts.getRawParameterValue(ParamID::MAX_GAIN_DB);
@@ -380,8 +405,10 @@ void LufsNormalizerProcessor::setCurrentProgram(int index)
     setParam(ParamID::EXP_RATIO,     p.expRatio);
     setParam(ParamID::EXP_KNEE,      p.expKnee);
     // AutoGain
-    setParam(ParamID::AUTOGAIN_TARGET, p.autoGainTarget);
-    setParam(ParamID::AUTOGAIN_SPEED,  p.autoGainSpeed);
+    setParam(ParamID::AUTOGAIN_TARGET,  p.autoGainTarget);
+    setParam(ParamID::AUTOGAIN_ATTACK,  p.autoGainAttack);
+    setParam(ParamID::AUTOGAIN_RELEASE, p.autoGainRelease);
+    setParam(ParamID::AUTOGAIN_MAXGAIN, p.autoGainMaxGain);
     // Gate
     setParam(ParamID::GATE_THRESHOLD, p.gateThreshold);
     // Limiter
@@ -427,4 +454,36 @@ juce::AudioProcessorEditor* LufsNormalizerProcessor::createEditor()
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new LufsNormalizerProcessor();
+}
+
+// ── measureLevels ─────────────────────────────────────────────────────────────
+void LufsNormalizerProcessor::measureLevels(const juce::AudioBuffer<float>& buffer,
+                                             std::atomic<float>& peakOut,
+                                             std::atomic<float>& rmsOut)
+{
+    const int numCh      = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+    if (numCh == 0 || numSamples == 0) return;
+
+    float peak = 0.0f;
+    float sumSq = 0.0f;
+
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        const float* data = buffer.getReadPointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float s = std::abs(data[i]);
+            if (s > peak) peak = s;
+            sumSq += data[i] * data[i];
+        }
+    }
+
+    const float rms = std::sqrt(sumSq / (float)(numCh * numSamples));
+
+    const float peakDb = (peak > 1.0e-10f) ? 20.0f * std::log10(peak) : -100.0f;
+    const float rmsDb  = (rms  > 1.0e-10f) ? 20.0f * std::log10(rms)  : -100.0f;
+
+    peakOut.store(peakDb);
+    rmsOut .store(rmsDb);
 }

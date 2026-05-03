@@ -13,8 +13,12 @@ public:
     
     void setEnabled(bool shouldBeEnabled) { enabled = shouldBeEnabled; }
     void setTargetRmsDb(float targetDb)   { targetRmsDb = targetDb; }
-    void setSpeedMs(float speedMs); // Controls how fast the gain rides
+    void setSpeedMs(float speedMs); // Kept for backward compat – sets both attack & release (MayB)
+    void setAttackMs(float ms);
+    void setReleaseMs(float ms);
+    void setMaxGainDb(float db)           { maxGainDb = db; }
     void setGateThresholdDb(float threshDb) { gateThresholdDb = threshDb; }
+    void setAllowReduce(bool allow)       { allowReduce = allow; }
 
     void processBlock(juce::AudioBuffer<float>& buffer);
     
@@ -25,6 +29,8 @@ private:
     float targetRmsDb = -18.0f;
     std::atomic<float> currentGainDb { 0.0f };
     float gateThresholdDb = -60.0f;
+    float maxGainDb = 12.0f;
+    bool  allowReduce = false;
     
     double sampleRate { 44100.0 };
     
@@ -33,7 +39,8 @@ private:
     
     // Smoothing for the applied gain
     float gainMultiplier { 1.0f };
-    float smoothCoeff { 0.001f };
+    float attackCoeff  { 0.001f };
+    float releaseCoeff { 0.001f };
     std::vector<float*> channelPointers;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AutoGain)

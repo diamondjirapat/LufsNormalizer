@@ -7,18 +7,31 @@ LevelHistory::LevelHistory(int historySeconds)
 {
 }
 
-void LevelHistory::pushValue(float lufs)
+void LevelHistory::pushInputValue(float db)
 {
-    history.push_back(lufs);
-    while ((int)history.size() > maxPoints)
-        history.pop_front();
+    inputHistory.push_back(db);
+    while ((int)inputHistory.size() > maxPoints)
+        inputHistory.pop_front();
     repaint();
 }
 
-float LevelHistory::lufsToY(float lufs, float height) const noexcept
+void LevelHistory::pushOutputValue(float db)
 {
-    const float clamped = std::clamp(lufs, kMinLUFS, kMaxLUFS);
-    const float norm    = (kMaxLUFS - clamped) / (kMaxLUFS - kMinLUFS);
+    outputHistory.push_back(db);
+    while ((int)outputHistory.size() > maxPoints)
+        outputHistory.pop_front();
+    repaint();
+}
+
+void LevelHistory::pushValue(float lufs)
+{
+    pushInputValue(lufs);
+}
+
+float LevelHistory::dbToY(float db, float height) const noexcept
+{
+    const float clamped = std::clamp(db, kMinDb, kMaxDb);
+    const float norm    = (kMaxDb - clamped) / (kMaxDb - kMinDb);
     return norm * height;
 }
 
@@ -30,10 +43,10 @@ void LevelHistory::paint(juce::Graphics& g)
     const float x = bounds.getX();
     const float y = bounds.getY();
 
-    // The background is handled by the parent panel now, 
-    // but we can add a very faint inner grid or just let it be transparent.
+    const bool hasInput  = !inputHistory.empty();
+    const bool hasOutput = !outputHistory.empty();
 
-    if (history.empty())
+    if (!hasInput && !hasOutput)
     {
         g.setColour(juce::Colours::grey.withAlpha(0.4f));
         g.setFont(juce::Font(juce::FontOptions(11.0f)));
@@ -42,45 +55,63 @@ void LevelHistory::paint(juce::Graphics& g)
     }
 
     // ── Target line ───────────────────────────────────────────────────────────
-    const float targetY = y + lufsToY(targetLUFS, h);
-    g.setColour(juce::Colour(0xffff9900).withAlpha(0.6f));
+    const float targetY = y + dbToY(targetLUFS, h);
+    g.setColour(juce::Colour(0xffff9900).withAlpha(0.5f));
     g.drawLine(x, targetY, x + w, targetY, 1.5f);
 
-    // ── History path ─────────────────────────────────────────────────────────
-    juce::Path path;
-    const int  n     = (int)history.size();
-    const float step = w / (float)std::max(maxPoints - 1, 1);
-
-    bool started = false;
-    for (int i = 0; i < n; ++i)
+    // ── Helper lambda to draw a history trace ─────────────────────────────────
+    auto drawTrace = [&](const std::deque<float>& history, juce::Colour strokeCol,
+                         juce::Colour fillCol, float strokeWidth)
     {
-        const float px = x + (float)(maxPoints - n + i) * step;
-        const float py = y + lufsToY(history[(size_t)i], h);
+        if (history.empty()) return;
 
-        if (!started) { path.startNewSubPath(px, py); started = true; }
-        else          { path.lineTo(px, py); }
-    }
+        juce::Path path;
+        const int  n    = (int)history.size();
+        const float step = w / (float)std::max(maxPoints - 1, 1);
 
-    // Fill under the curve
-    juce::Path filled = path;
-    filled.lineTo(x + (float)(maxPoints - 1) * step, y + h);
-    filled.lineTo(x, y + h);
-    filled.closeSubPath();
+        bool started = false;
+        for (int i = 0; i < n; ++i)
+        {
+            const float px = x + (float)(maxPoints - n + i) * step;
+            const float py = y + dbToY(history[(size_t)i], h);
 
-    g.setColour(juce::Colour(0xff00d4ff).withAlpha(0.15f));
-    g.fillPath(filled);
+            if (!started) { path.startNewSubPath(px, py); started = true; }
+            else          { path.lineTo(px, py); }
+        }
 
-    // Stroke
-    g.setColour(juce::Colour(0xff00d4ff));
-    g.strokePath(path, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved));
+        // Fill under the curve
+        juce::Path filled = path;
+        filled.lineTo(x + (float)(maxPoints - 1) * step, y + h);
+        filled.lineTo(x + (float)(maxPoints - n) * step, y + h);
+        filled.closeSubPath();
+
+        g.setColour(fillCol);
+        g.fillPath(filled);
+
+        // Stroke
+        g.setColour(strokeCol);
+        g.strokePath(path, juce::PathStrokeType(strokeWidth, juce::PathStrokeType::curved));
+    };
+
+    // ── Draw input trace (blue, behind) ───────────────────────────────────────
+    drawTrace(inputHistory,
+              juce::Colour(0xff3a8fd4),            // blue stroke
+              juce::Colour(0xff3a8fd4).withAlpha(0.12f), // blue fill
+              1.5f);
+
+    // ── Draw output trace (green, in front) ───────────────────────────────────
+    drawTrace(outputHistory,
+              juce::Colour(0xff2ecc71),            // green stroke
+              juce::Colour(0xff2ecc71).withAlpha(0.12f), // green fill
+              2.0f);
 
     // ── Scale labels ─────────────────────────────────────────────────────────
     g.setFont(juce::Font(juce::FontOptions(8.0f)));
     g.setColour(juce::Colours::grey);
-    for (float lufs = kMaxLUFS; lufs >= kMinLUFS; lufs -= 10.0f)
+    for (float db = kMaxDb; db >= kMinDb; db -= 12.0f)
     {
-        const float labelY = y + lufsToY(lufs, h);
-        g.drawText(juce::String((int)lufs),
+        const float labelY = y + dbToY(db, h);
+        g.drawText(juce::String((int)db),
                    (int)x, (int)(labelY - 5.0f), 20, 10,
                    juce::Justification::left, false);
         g.setColour(juce::Colours::grey.withAlpha(0.2f));
@@ -88,5 +119,21 @@ void LevelHistory::paint(juce::Graphics& g)
         g.setColour(juce::Colours::grey);
     }
 
-    // Border is handled by parent panel.
+    // ── Legend in top-right corner ────────────────────────────────────────────
+    const float legendX = x + w - 90.0f;
+    const float legendY = y + 4.0f;
+
+    g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+
+    // Input (blue) legend
+    g.setColour(juce::Colour(0xff3a8fd4));
+    g.fillRect(legendX, legendY + 2.0f, 10.0f, 3.0f);
+    g.drawText("Input", (int)(legendX + 14.0f), (int)legendY, 30, 10,
+               juce::Justification::left, false);
+
+    // Output (green) legend
+    g.setColour(juce::Colour(0xff2ecc71));
+    g.fillRect(legendX + 48.0f, legendY + 2.0f, 10.0f, 3.0f);
+    g.drawText("Output", (int)(legendX + 62.0f), (int)legendY, 36, 10,
+               juce::Justification::left, false);
 }

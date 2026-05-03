@@ -3,15 +3,21 @@
 #include <deque>
 
 /**
- * Scrolling LUFS history graph.
- * Displays short-term LUFS over the last N seconds as a waveform.
+ * Scrolling level history graph.
+ * Displays both input (blue) and output (green) levels over the last N seconds.
  */
 class LevelHistory : public juce::Component
 {
 public:
     explicit LevelHistory(int historySeconds = 30);
 
-    /** Push a new short-term LUFS value (call from timer on message thread). */
+    /** Push a new input level value in dBFS (call from timer on message thread). */
+    void pushInputValue(float db);
+
+    /** Push a new output level value in dBFS (call from timer on message thread). */
+    void pushOutputValue(float db);
+
+    /** Legacy single-value push (pushes to input). */
     void pushValue(float lufs);
 
     void setTargetLUFS(float lufs) noexcept { targetLUFS = lufs; }
@@ -19,12 +25,13 @@ public:
     void paint(juce::Graphics& g) override;
 
 private:
-    static constexpr float kMinLUFS = -40.0f;
-    static constexpr float kMaxLUFS =   0.0f;
+    static constexpr float kMinDb = -60.0f;
+    static constexpr float kMaxDb =   0.0f;
 
     int maxPoints;
-    std::deque<float> history;
+    std::deque<float> inputHistory;
+    std::deque<float> outputHistory;
     float targetLUFS = -16.0f;
 
-    float lufsToY(float lufs, float height) const noexcept;
+    float dbToY(float db, float height) const noexcept;
 };

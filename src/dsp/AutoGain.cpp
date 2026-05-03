@@ -32,7 +32,8 @@ void AutoGain::prepare(double newSampleRate, int samplesPerBlock, int numChannel
     rmsFilter.setCutoffFrequency(2.0f);
     rmsFilter.prepare(spec);
 
-    setSpeedMs(500.0f); // default speed
+    setAttackMs(500.0f);  // default attack
+    setReleaseMs(500.0f); // default release
     reset();
 }
 
@@ -45,10 +46,22 @@ void AutoGain::reset()
 
 void AutoGain::setSpeedMs(float speedMs)
 {
-    // Convert ms to a 1-pole smoothing coefficient
-    const float clampedMs = std::max(speedMs, 1.0f);
-    const float safeSampleRate = std::max((float) sampleRate, 1.0f);
-    smoothCoeff = 1.0f - std::exp(-1.0f / (clampedMs * 0.001f * safeSampleRate));
+    setAttackMs(speedMs);
+    setReleaseMs(speedMs);
+}
+
+void AutoGain::setAttackMs(float ms)
+{
+    const float clampedMs = std::max(ms, 1.0f);
+    const float safeSampleRate = std::max((float)sampleRate, 1.0f);
+    attackCoeff = 1.0f - std::exp(-1.0f / (clampedMs * 0.001f * safeSampleRate));
+}
+
+void AutoGain::setReleaseMs(float ms)
+{
+    const float clampedMs = std::max(ms, 1.0f);
+    const float safeSampleRate = std::max((float)sampleRate, 1.0f);
+    releaseCoeff = 1.0f - std::exp(-1.0f / (clampedMs * 0.001f * safeSampleRate));
 }
 
 void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
@@ -74,8 +87,9 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
 
     // Precalculate loop constants for performance
     const float targetRmsLinear = std::pow(10.0f, targetRmsDb / 20.0f);
-    const float maxGainMult = std::pow(10.0f, 12.0f / 20.0f);
-    const float minGainMult = std::pow(10.0f, -12.0f / 20.0f);
+    const float maxGainMult = std::pow(10.0f, maxGainDb / 20.0f);
+    // If allowReduce is on, allow negative gain down to -maxGainDb; otherwise clamp at unity (1.0)
+    const float minGainMult = allowReduce ? std::pow(10.0f, -maxGainDb / 20.0f) : 1.0f;
 
     // Process sample by sample
     for (int i = 0; i < numSamples; ++i)
@@ -103,12 +117,14 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
         if (currentRmsDb > gateThresholdDb)
         {
             requiredMultiplier = targetRmsLinear / std::sqrt(smoothedSq);
-            // Clamp the required multiplier to prevent extreme behavior (e.g., max +/- 12 dB)
+            // Clamp the required multiplier
             requiredMultiplier = std::clamp(requiredMultiplier, minGainMult, maxGainMult);
         }
 
-        // 5. Smooth the gain multiplier
-        gainMultiplier += smoothCoeff * (requiredMultiplier - gainMultiplier);
+        // 5. Smooth the gain multiplier using attack/release
+        // Attack = gain going up, Release = gain going down
+        const float coeff = (requiredMultiplier > gainMultiplier) ? attackCoeff : releaseCoeff;
+        gainMultiplier += coeff * (requiredMultiplier - gainMultiplier);
 
         // 6. Apply to signal
         for (int ch = 0; ch < safeChannels; ++ch)

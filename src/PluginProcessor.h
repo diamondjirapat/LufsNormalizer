@@ -28,7 +28,10 @@ namespace ParamID
     // AutoGain
     inline constexpr const char* AUTOGAIN_ENABLED = "autoGainEnabled";
     inline constexpr const char* AUTOGAIN_TARGET  = "autoGainTarget";
-    inline constexpr const char* AUTOGAIN_SPEED   = "autoGainSpeed";
+    inline constexpr const char* AUTOGAIN_ATTACK  = "autoGainAttack";
+    inline constexpr const char* AUTOGAIN_RELEASE = "autoGainRelease";
+    inline constexpr const char* AUTOGAIN_MAXGAIN = "autoGainMaxGain";
+    inline constexpr const char* AUTOGAIN_REDUCE  = "autoGainReduce";
 
     // Expander
     inline constexpr const char* EXP_ENABLED      = "expEnabled";
@@ -65,7 +68,9 @@ struct Preset
     float expKnee;
     // AutoGain
     float autoGainTarget;
-    float autoGainSpeed;
+    float autoGainAttack;
+    float autoGainRelease;
+    float autoGainMaxGain;
     // Gate
     float gateThreshold;
     // Limiter
@@ -73,12 +78,12 @@ struct Preset
 };
 
 inline constexpr Preset kPresets[] = {
-    //                 name         tgt   atk   rel   max   eT    eR   eK    agT   agS    gT     lC
-    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -18.0f, 1000.0f, -60.0f, -1.0f },
-    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -18.0f,  800.0f, -55.0f, -1.0f },
-    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -20.0f,  600.0f, -50.0f, -2.0f },
-    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -24.0f, 2000.0f, -60.0f, -1.0f },
-    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -16.0f, 1500.0f, -70.0f, -1.0f },
+    //                 name         tgt   atk   rel   max   eT    eR   eK    agT   agAtk agRel agMax  gT     lC
+    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -18.0f, 500.0f, 1000.0f, 12.0f, -60.0f, -1.0f },
+    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -18.0f, 400.0f,  800.0f, 12.0f, -55.0f, -1.0f },
+    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -20.0f, 300.0f,  600.0f, 12.0f, -50.0f, -2.0f },
+    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -24.0f, 800.0f, 2000.0f, 12.0f, -60.0f, -1.0f },
+    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -16.0f, 600.0f, 1500.0f, 12.0f, -70.0f, -1.0f },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,6 +131,15 @@ public:
     float getExpanderGrDb()   const noexcept { return expander.getGainReductionDb();   }
     float getLimiterGrDb()    const noexcept { return limiter.getGainReductionDb();     }
 
+    /** Input peak level in dBFS (before any processing). */
+    float getInputPeakDb()   const noexcept { return inputPeakDb.load();  }
+    /** Output peak level in dBFS (after full processing chain). */
+    float getOutputPeakDb()  const noexcept { return outputPeakDb.load(); }
+    /** Input RMS level in dBFS. */
+    float getInputRmsDb()    const noexcept { return inputRmsDb.load();   }
+    /** Output RMS level in dBFS. */
+    float getOutputRmsDb()   const noexcept { return outputRmsDb.load();  }
+
     void resetIntegrated() { meter.reset(); }
 
 private:
@@ -160,7 +174,10 @@ private:
     std::atomic<float>* pExpKnee        = nullptr;
     std::atomic<float>* pAutoGainEnabled = nullptr;
     std::atomic<float>* pAutoGainTarget = nullptr;
-    std::atomic<float>* pAutoGainSpeed  = nullptr;
+    std::atomic<float>* pAutoGainAttack = nullptr;
+    std::atomic<float>* pAutoGainRelease = nullptr;
+    std::atomic<float>* pAutoGainMaxGain = nullptr;
+    std::atomic<float>* pAutoGainReduce = nullptr;
     std::atomic<float>* pAttackMs       = nullptr;
     std::atomic<float>* pReleaseMs      = nullptr;
     std::atomic<float>* pMaxGainDb      = nullptr;
@@ -172,9 +189,18 @@ private:
     std::atomic<float>* pLookaheadMs    = nullptr;
     std::atomic<float>* pDryWet         = nullptr;
 
+    // ── Metering state ────────────────────────────────────────────────────────
+    std::atomic<float> inputPeakDb  { -100.0f };
+    std::atomic<float> outputPeakDb { -100.0f };
+    std::atomic<float> inputRmsDb   { -100.0f };
+    std::atomic<float> outputRmsDb  { -100.0f };
+
     // ── Helpers ───────────────────────────────────────────────────────────────
     void syncDspParameters();
     void cacheParameterPointers();
+    void measureLevels(const juce::AudioBuffer<float>& buffer,
+                       std::atomic<float>& peakOut,
+                       std::atomic<float>& rmsOut);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LufsNormalizerProcessor)
 };

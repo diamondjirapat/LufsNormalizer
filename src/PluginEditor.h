@@ -52,7 +52,8 @@ private:
     DarkLookAndFeel laf;
 
     // ── Meters ────────────────────────────────────────────────────────────────
-    LufsDisplay        lufsDisplay;
+    LufsDisplay        inputMeter;   // Left side – raw input (blue)
+    LufsDisplay        outputMeter;  // Right side – output (green)
     GainReductionMeter grMeter;
     LevelHistory       levelHistory;
 
@@ -69,10 +70,13 @@ private:
     LabelledKnob       releaseKnob;
     LabelledKnob       maxGainKnob;
 
-    // ── AutoGain section ──────────────────────────────────────────────────────
+    // ── AutoGain section ──────────────────────────────────────────────────
     juce::ToggleButton autoGainToggle { "AutoGain" };
+    juce::ToggleButton autoGainReduceToggle { "Reduce" };
     LabelledKnob       autoGainTargetKnob;
-    LabelledKnob       autoGainSpeedKnob;
+    LabelledKnob       autoGainAttackKnob;
+    LabelledKnob       autoGainReleaseKnob;
+    LabelledKnob       autoGainMaxGainKnob;
 
     // ── Expander section ──────────────────────────────────────────────────────
     juce::ToggleButton expanderToggle { "Expander" };
@@ -103,8 +107,9 @@ private:
     // ── History tick counter (per-instance, not static) ───────────────────────
     int histTick = 0;
 
-    // ── LUFS readout labels ───────────────────────────────────────────────────
+    // ── LUFS readout labels ───────────────────────────────────────────────
     juce::Label momentaryLabel, shortTermLabel, integratedLabel;
+    juce::Label outMomentaryLabel, outShortTermLabel, outIntegratedLabel;
 
     // ── APVTS attachments ─────────────────────────────────────────────────────
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -112,11 +117,11 @@ private:
 
     std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt;
     std::unique_ptr<SliderAttachment> gateAtt, gateAttackAtt, gateReleaseAtt;
-    std::unique_ptr<SliderAttachment> autoGainTargetAtt, autoGainSpeedAtt;
+    std::unique_ptr<SliderAttachment> autoGainTargetAtt, autoGainAttackAtt, autoGainReleaseAtt, autoGainMaxGainAtt;
     std::unique_ptr<SliderAttachment> expThreshAtt, expRatioAtt, expAttackAtt,
                                       expReleaseAtt, expKneeAtt;
     std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt, dryWetAtt;
-    std::unique_ptr<ButtonAttachment> gateOnAtt, autoGainOnAtt, levelerOnAtt, 
+    std::unique_ptr<ButtonAttachment> gateOnAtt, autoGainOnAtt, autoGainReduceOnAtt, levelerOnAtt, 
                                       expanderOnAtt, limiterOnAtt, lookaheadOnAtt;
 
     // ── Timer ─────────────────────────────────────────────────────────────────

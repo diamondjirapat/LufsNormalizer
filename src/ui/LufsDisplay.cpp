@@ -7,21 +7,16 @@ LufsDisplay::LufsDisplay()
     setOpaque(false);
 }
 
-void LufsDisplay::setMomentaryLUFS (float lufs) noexcept { momentaryLUFS .store(lufs); }
-void LufsDisplay::setShortTermLUFS (float lufs) noexcept { shortTermLUFS .store(lufs); }
-void LufsDisplay::setIntegratedLUFS(float lufs) noexcept { integratedLUFS.store(lufs); }
-void LufsDisplay::setTargetLUFS    (float lufs) noexcept { targetLUFS    .store(lufs); }
-
 void LufsDisplay::resized()
 {
     // Leave room for scale labels on the left
-    meterArea = getLocalBounds().reduced(4).withTrimmedLeft(28);
+    meterArea = getLocalBounds().reduced(4).withTrimmedLeft(24);
 }
 
-float LufsDisplay::lufsToY(float lufs, float height) const noexcept
+float LufsDisplay::dbToY(float db, float height) const noexcept
 {
-    const float clamped = std::clamp(lufs, kMinLUFS, kMaxLUFS);
-    const float norm    = (kMaxLUFS - clamped) / (kMaxLUFS - kMinLUFS);
+    const float clamped = std::clamp(db, kMinDb, kMaxDb);
+    const float norm    = (kMaxDb - clamped) / (kMaxDb - kMinDb);
     return norm * height;
 }
 
@@ -33,92 +28,134 @@ void LufsDisplay::paint(juce::Graphics& g)
     const float y = (float)meterArea.getY();
 
     // ── Background ────────────────────────────────────────────────────────────
-    g.setColour(juce::Colour(0xff1c1d24)); // lighter panel grey
+    g.setColour(juce::Colour(0xff1c1d24));
     g.fillRoundedRectangle(meterArea.toFloat(), 4.0f);
 
-    // ── Colour gradient zones ─────────────────────────────────────────────────
-    // Green zone: below target, Yellow: near target, Red: above target
-    const float targetY = y + lufsToY(targetLUFS.load(), h);
+    // ── Colour scheme based on mode ───────────────────────────────────────────
+    const bool isInput = (mode == Input);
+    const juce::Colour barColour   = isInput ? juce::Colour(0xff3a8fd4)  // blue
+                                             : juce::Colour(0xff2ecc71); // green
+    const juce::Colour peakColour  = isInput ? juce::Colour(0xff5bb5ff)  // bright blue
+                                             : juce::Colour(0xff5dff9e); // bright green
+    const juce::Colour rmsColour   = isInput ? juce::Colour(0xcc2a6fa8)  // darker blue
+                                             : juce::Colour(0xcc1fa85b); // darker green
+    const juce::Colour glowColour  = isInput ? juce::Colour(0xff00a0ff)
+                                             : juce::Colour(0xff00ff88);
 
-    // Draw coloured background bands
-    const float greenTop = y + lufsToY(-10.0f, h);
-    const float yellowTop = targetY - 2.0f;
-
-    g.setColour(juce::Colour(0xff2d4a2d).withAlpha(0.3f));
-    g.fillRect(x, greenTop, w, h - (greenTop - y));
-
-    g.setColour(juce::Colour(0xff4a4a1a).withAlpha(0.3f));
-    g.fillRect(x, yellowTop, w, greenTop - yellowTop);
-
-    g.setColour(juce::Colour(0xff4a1a1a).withAlpha(0.3f));
-    g.fillRect(x, y, w, yellowTop - y);
-
-    // ── Short-term bar (wider, semi-transparent) ──────────────────────────────
-    const float stLufs = shortTermLUFS.load();
-    if (stLufs > kMinLUFS)
+    // ── Gradient background zones (subtle) ────────────────────────────────────
     {
-        const float barTop = y + lufsToY(stLufs, h);
-        const float barH   = h - (barTop - y);
-        g.setColour(juce::Colour(0x8800d4ff));
-        g.fillRect(x, barTop, w, barH);
+        // Red zone: above -6 dB
+        const float redBot = y + dbToY(-6.0f, h);
+        g.setColour(juce::Colour(0xff4a1a1a).withAlpha(0.25f));
+        g.fillRect(x, y, w, redBot - y);
+
+        // Yellow zone: -6 to -18
+        const float yellowBot = y + dbToY(-18.0f, h);
+        g.setColour(juce::Colour(0xff4a4a1a).withAlpha(0.15f));
+        g.fillRect(x, redBot, w, yellowBot - redBot);
+
+        // Green zone: below -18
+        g.setColour(juce::Colour(0xff1a3a1a).withAlpha(0.15f));
+        g.fillRect(x, yellowBot, w, (y + h) - yellowBot);
     }
 
-    // ── Momentary bar (narrow, bright) ───────────────────────────────────────
-    const float momLufs = momentaryLUFS.load();
-    if (momLufs > kMinLUFS)
+    // ── Read current values ───────────────────────────────────────────────────
+    const float curPeakDb = peakDb.load();
+    const float curRmsDb  = rmsDb.load();
+
+    // ── Peak-hold logic ───────────────────────────────────────────────────────
+    if (curPeakDb > peakHoldDb)
     {
-        const float barTop = y + lufsToY(momLufs, h);
-        const float barH   = h - (barTop - y);
-        g.setColour(juce::Colour(0xcc2ecc71));
-        g.fillRect(x + w * 0.3f, barTop, w * 0.4f, barH);
+        peakHoldDb = curPeakDb;
+        peakHoldTicks = kPeakHoldFrames;
+    }
+    else if (peakHoldTicks > 0)
+    {
+        --peakHoldTicks;
+    }
+    else
+    {
+        peakHoldDb -= kPeakFallRate;
+        if (peakHoldDb < kMinDb) peakHoldDb = kMinDb;
     }
 
-    // ── Integrated LUFS tick ──────────────────────────────────────────────────
-    const float intLufs = integratedLUFS.load();
-    if (intLufs > kMinLUFS - 1.0f)
+    // ── RMS bar (wider, semi-transparent fill) ────────────────────────────────
+    if (curRmsDb > kMinDb)
     {
-        const float tickY = y + lufsToY(intLufs, h);
-        g.setColour(juce::Colours::white.withAlpha(0.9f));
-        g.fillRect(x, tickY - 1.0f, w, 2.0f);
+        const float barTop = y + dbToY(curRmsDb, h);
+        const float barH   = (y + h) - barTop;
 
-        g.setFont(juce::Font(juce::FontOptions(9.0f)));
-        g.setColour(juce::Colours::white);
-        g.drawText(juce::String(intLufs, 1) + " I",
-                   (int)x, (int)(tickY - 10.0f), (int)w, 10,
-                   juce::Justification::centred, false);
+        // Gradient fill for the RMS bar
+        juce::ColourGradient grad(rmsColour.withAlpha(0.6f), x, barTop,
+                                  rmsColour.withAlpha(0.2f), x, y + h, false);
+        g.setGradientFill(grad);
+        g.fillRect(x + 1.0f, barTop, w - 2.0f, barH);
     }
 
-    // ── Target line ───────────────────────────────────────────────────────────
-    g.setColour(juce::Colour(0xffffcc00));
-    g.drawLine(x, targetY, x + w, targetY, 1.5f);
+    // ── Peak bar (narrow, bright, centred) ────────────────────────────────────
+    if (curPeakDb > kMinDb)
+    {
+        const float barTop = y + dbToY(curPeakDb, h);
+        const float barH   = (y + h) - barTop;
+        const float peakW  = w * 0.4f;
+        const float peakX  = x + (w - peakW) * 0.5f;
+
+        juce::ColourGradient grad(peakColour.withAlpha(0.9f), peakX, barTop,
+                                  barColour.withAlpha(0.5f), peakX, y + h, false);
+        g.setGradientFill(grad);
+        g.fillRect(peakX, barTop, peakW, barH);
+    }
+
+    // ── Peak-hold tick ────────────────────────────────────────────────────────
+    if (peakHoldDb > kMinDb)
+    {
+        const float tickY = y + dbToY(peakHoldDb, h);
+        g.setColour(glowColour.withAlpha(0.9f));
+        g.fillRect(x + 2.0f, tickY - 1.0f, w - 4.0f, 2.0f);
+    }
+
+    // ── Target line (only for output meter) ───────────────────────────────────
+    if (!isInput)
+    {
+        const float tgtLufs = targetLUFS.load();
+        // Map LUFS target to our dBFS scale (approximate: LUFS ≈ dBFS for calibrated signals)
+        const float tgtY = y + dbToY(tgtLufs, h);
+        if (tgtY > y && tgtY < y + h)
+        {
+            g.setColour(juce::Colour(0xffffcc00).withAlpha(0.7f));
+            g.drawLine(x, tgtY, x + w, tgtY, 1.5f);
+        }
+    }
 
     // ── Scale labels ─────────────────────────────────────────────────────────
-    g.setFont(juce::Font(juce::FontOptions(9.0f)));
-    g.setColour(juce::Colours::lightgrey);
+    g.setFont(juce::Font(juce::FontOptions(8.0f)));
+    g.setColour(juce::Colours::lightgrey.withAlpha(0.7f));
 
     const float scaleX = (float)getLocalBounds().getX();
-    for (float lufs = kMaxLUFS; lufs >= kMinLUFS; lufs -= 5.0f)
+    for (float db = kMaxDb; db >= kMinDb; db -= 6.0f)
     {
-        const float labelY = y + lufsToY(lufs, h);
-        g.drawText(juce::String((int)lufs),
-                   (int)scaleX, (int)(labelY - 5.0f), 26, 10,
+        const float labelY = y + dbToY(db, h);
+        g.drawText(juce::String((int)db),
+                   (int)scaleX, (int)(labelY - 5.0f), 22, 10,
                    juce::Justification::centredRight, false);
 
         // Tick mark
-        g.setColour(juce::Colours::grey.withAlpha(0.4f));
+        g.setColour(juce::Colours::grey.withAlpha(0.25f));
         g.drawLine(x, labelY, x + w, labelY, 0.5f);
-        g.setColour(juce::Colours::lightgrey);
+        g.setColour(juce::Colours::lightgrey.withAlpha(0.7f));
     }
 
-    // Border handled by parent
+    // ── Mode label at bottom ──────────────────────────────────────────────────
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    g.setColour(barColour);
+    g.drawText(isInput ? "IN" : "OUT",
+               (int)x, (int)(y + h - 16.0f), (int)w, 14,
+               juce::Justification::centred, false);
 
-    // ── Labels ────────────────────────────────────────────────────────────────
+    // ── dB readout at top ─────────────────────────────────────────────────────
     g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
-    g.setColour(juce::Colour(0xff00d4ff));
-    g.drawText("ST", (int)x, (int)(y + h - 14.0f), 14, 12,
-               juce::Justification::left, false);
-
-    g.setColour(juce::Colour(0xff2ecc71));
-    g.drawText("M", (int)(x + w * 0.3f), (int)(y + h - 14.0f), 14, 12,
-               juce::Justification::left, false);
+    g.setColour(juce::Colours::white);
+    juce::String dbText = (curPeakDb > -99.0f) ? juce::String(curPeakDb, 1) + " dB" : "-inf";
+    g.drawText(dbText, (int)x, (int)y + 2, (int)w, 12,
+               juce::Justification::centred, false);
 }

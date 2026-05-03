@@ -138,7 +138,10 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     setResizeLimits(720, 420, 1600, 900);
 
     // ── Meters ────────────────────────────────────────────────────────────────
-    addAndMakeVisible(lufsDisplay);
+    inputMeter.setMode(LufsDisplay::Input);
+    outputMeter.setMode(LufsDisplay::Output);
+    addAndMakeVisible(inputMeter);
+    addAndMakeVisible(outputMeter);
     addAndMakeVisible(grMeter);
     addAndMakeVisible(levelHistory);
 
@@ -155,10 +158,13 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     releaseKnob.setup(this, "Release");
     maxGainKnob.setup(this, "Max Gain");
 
-    // ── AutoGain section ──────────────────────────────────────────────────────
+    // ── AutoGain section ──────────────────────────────────────────────────
     addAndMakeVisible(autoGainToggle);
+    addAndMakeVisible(autoGainReduceToggle);
     autoGainTargetKnob.setup(this, "Target");
-    autoGainSpeedKnob.setup(this, "Speed");
+    autoGainAttackKnob.setup(this, "Attack");
+    autoGainReleaseKnob.setup(this, "Release");
+    autoGainMaxGainKnob.setup(this, "Max Gain");
 
     // ── Expander section ──────────────────────────────────────────────────────
     addAndMakeVisible(expanderToggle);
@@ -199,10 +205,11 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     addAndMakeVisible(resetButton);
 
     // ── LUFS readout labels ───────────────────────────────────────────────────
-    for (auto* lbl : { &momentaryLabel, &shortTermLabel, &integratedLabel })
+    for (auto* lbl : { &momentaryLabel, &shortTermLabel, &integratedLabel,
+                        &outMomentaryLabel, &outShortTermLabel, &outIntegratedLabel })
     {
         lbl->setJustificationType(juce::Justification::centred);
-        lbl->setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+        lbl->setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
         addAndMakeVisible(*lbl);
     }
 
@@ -231,9 +238,12 @@ void LufsNormalizerEditor::buildAttachments()
     gateReleaseAtt = std::make_unique<SliderAttachment>(apvts, ParamID::GATE_RELEASE,   gateReleaseKnob.slider);
     gateOnAtt      = std::make_unique<ButtonAttachment>(apvts, ParamID::GATE_ENABLED,   gateToggle);
 
-    autoGainTargetAtt = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_TARGET, autoGainTargetKnob.slider);
-    autoGainSpeedAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_SPEED,  autoGainSpeedKnob.slider);
-    autoGainOnAtt     = std::make_unique<ButtonAttachment>(apvts, ParamID::AUTOGAIN_ENABLED, autoGainToggle);
+    autoGainTargetAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_TARGET,  autoGainTargetKnob.slider);
+    autoGainAttackAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_ATTACK,   autoGainAttackKnob.slider);
+    autoGainReleaseAtt = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_RELEASE,  autoGainReleaseKnob.slider);
+    autoGainMaxGainAtt = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_MAXGAIN,  autoGainMaxGainKnob.slider);
+    autoGainOnAtt      = std::make_unique<ButtonAttachment>(apvts, ParamID::AUTOGAIN_ENABLED,  autoGainToggle);
+    autoGainReduceOnAtt = std::make_unique<ButtonAttachment>(apvts, ParamID::AUTOGAIN_REDUCE,  autoGainReduceToggle);
 
     expThreshAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_THRESHOLD, expThreshKnob.slider);
     expRatioAtt   = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_RATIO,     expRatioKnob.slider);
@@ -270,9 +280,9 @@ void LufsNormalizerEditor::layoutComponents()
 
     area.removeFromTop(6);
 
-    // ── Left column: LUFS meter ───────────────────────────────────────────────
-    auto leftCol = area.removeFromLeft(80);
-    lufsDisplay.setBounds(leftCol.removeFromTop(leftCol.getHeight() - 60));
+    // ── Left column: Input meter ──────────────────────────────────────────────
+    auto leftCol = area.removeFromLeft(70);
+    inputMeter.setBounds(leftCol.removeFromTop(leftCol.getHeight() - 60));
 
     // LUFS readout labels below meter
     momentaryLabel .setBounds(leftCol.removeFromTop(20));
@@ -280,6 +290,17 @@ void LufsNormalizerEditor::layoutComponents()
     integratedLabel.setBounds(leftCol.removeFromTop(20));
 
     area.removeFromLeft(6);
+
+    // ── Right column: Output meter ──────────────────────────────────────────
+    auto rightCol = area.removeFromRight(70);
+    outputMeter.setBounds(rightCol.removeFromTop(rightCol.getHeight() - 60));
+
+    // Output LUFS readout labels below meter
+    outMomentaryLabel .setBounds(rightCol.removeFromTop(20));
+    outShortTermLabel .setBounds(rightCol.removeFromTop(20));
+    outIntegratedLabel.setBounds(rightCol.removeFromTop(20));
+
+    area.removeFromRight(6);
 
     // ── Right column: controls ────────────────────────────────────────────────
     auto rightArea = area;
@@ -301,83 +322,109 @@ void LufsNormalizerEditor::layoutComponents()
     auto botControls = rightArea;
 
     // Row 1: Gate (left) | Expander (mid) | AutoGain (right)
-    auto gateArea = topControls.removeFromLeft(topControls.getWidth() / 3 - 3);
+    int row1Usable = topControls.getWidth() - 12;
+    auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt((float) topControls.getWidth() * 0.65f - 3.0f));
+    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (5.0f / 12.0f)));
     topControls.removeFromLeft(6);
     auto autoGainArea = topControls;
 
-    // Gate section
+    // Row 2: Leveler (left) | Limiter (mid) | Lookahead (right)
+    int row2Usable = botControls.getWidth() - 12;
+    auto levelerArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
+    botControls.removeFromLeft(6);
+    auto limiterArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (1.5f / 7.5f)));
+    botControls.removeFromLeft(6);
+    auto lookaheadArea = botControls;
+
+    // Process Titles for Row 1
     gateArea.removeFromTop(8); 
     auto gateTitleRow = gateArea.removeFromTop(24);
     gateTitleRow.removeFromLeft(8); 
     gateToggle.setBounds(gateTitleRow.removeFromLeft(100));
     gateArea.removeFromTop(8);
-    const int gateKnobW = gateArea.getWidth() / 3;
-    gateKnob       .setBounds(gateArea.removeFromLeft(gateKnobW));
-    gateAttackKnob .setBounds(gateArea.removeFromLeft(gateKnobW));
-    gateReleaseKnob.setBounds(gateArea);
 
-    // Expander section
     expanderArea.removeFromTop(8); 
     auto expTitleRow = expanderArea.removeFromTop(24);
     expTitleRow.removeFromLeft(8); 
     expanderToggle.setBounds(expTitleRow.removeFromLeft(100));
     expanderArea.removeFromTop(8);
-    const int expKnobW = expanderArea.getWidth() / 5;
-    expThreshKnob .setBounds(expanderArea.removeFromLeft(expKnobW));
-    expRatioKnob  .setBounds(expanderArea.removeFromLeft(expKnobW));
-    expAttackKnob .setBounds(expanderArea.removeFromLeft(expKnobW));
-    expReleaseKnob.setBounds(expanderArea.removeFromLeft(expKnobW));
-    expKneeKnob   .setBounds(expanderArea);
 
-    // AutoGain section
     autoGainArea.removeFromTop(8);
     auto autoGainTitleRow = autoGainArea.removeFromTop(24);
     autoGainTitleRow.removeFromLeft(8);
     autoGainToggle.setBounds(autoGainTitleRow.removeFromLeft(100));
+    autoGainReduceToggle.setBounds(autoGainTitleRow);
     autoGainArea.removeFromTop(8);
-    const int agKnobW = autoGainArea.getWidth() / 2;
-    autoGainTargetKnob.setBounds(autoGainArea.removeFromLeft(agKnobW));
-    autoGainSpeedKnob.setBounds(autoGainArea);
 
-
-    // Row 2: Leveler (left) | Limiter (mid) | Lookahead (right)
-    auto levelerArea = botControls.removeFromLeft(botControls.getWidth() / 2 - 3);
-    botControls.removeFromLeft(6);
-    auto limiterArea    = botControls.removeFromLeft(botControls.getWidth() / 2 - 3);
-    botControls.removeFromLeft(6);
-    auto lookaheadArea  = botControls;
-
-    // Leveler section
+    // Process Titles for Row 2
     levelerArea.removeFromTop(8); 
     auto titleRow = levelerArea.removeFromTop(24);
     titleRow.removeFromLeft(8); 
     levelerToggle.setBounds(titleRow.removeFromLeft(100));
     levelerArea.removeFromTop(8);
-    const int knobW = levelerArea.getWidth() / 4;
-    targetKnob .setBounds(levelerArea.removeFromLeft(knobW));
-    attackKnob .setBounds(levelerArea.removeFromLeft(knobW));
-    releaseKnob.setBounds(levelerArea.removeFromLeft(knobW));
-    maxGainKnob.setBounds(levelerArea);
 
-    // Limiter
     limiterArea.removeFromTop(8);
     auto limTitleRow = limiterArea.removeFromTop(24);
     limTitleRow.removeFromLeft(8);
-    limiterToggle.setBounds(limTitleRow.removeFromLeft(150));
+    limiterToggle.setBounds(limTitleRow.removeFromLeft(120));
     limiterArea.removeFromTop(8);
-    ceilingKnob.setBounds(limiterArea.removeFromLeft(limiterArea.getWidth() / 2));
 
-    // Lookahead + Mix
     lookaheadArea.removeFromTop(8);
     auto lookTitleRow = lookaheadArea.removeFromTop(24);
     lookTitleRow.removeFromLeft(8);
-    lookaheadToggle.setBounds(lookTitleRow.removeFromLeft(150));
+    lookaheadToggle.setBounds(lookTitleRow.removeFromLeft(120));
     lookaheadArea.removeFromTop(8);
+
+    // Calculate minimum uniform size for all knobs
+    int minSlotW = std::min({
+        gateArea.getWidth() / 3,
+        expanderArea.getWidth() / 5,
+        autoGainArea.getWidth() / 4,
+        levelerArea.getWidth() / 4,
+        limiterArea.getWidth() / 1,
+        lookaheadArea.getWidth() / 2
+    });
+
+    int minSlotH = std::min(gateArea.getHeight(), levelerArea.getHeight());
+
+    int finalKnobW = minSlotW;
+    int finalKnobH = minSlotH;
+
+    auto placeKnob = [finalKnobW, finalKnobH](LabelledKnob& knob, juce::Rectangle<int> slot) {
+        knob.setBounds(slot.withSizeKeepingCentre(finalKnobW, finalKnobH));
+    };
+
+    // Place Knobs
+    const int gateKnobW = gateArea.getWidth() / 3;
+    placeKnob(gateKnob,       gateArea.removeFromLeft(gateKnobW));
+    placeKnob(gateAttackKnob, gateArea.removeFromLeft(gateKnobW));
+    placeKnob(gateReleaseKnob,gateArea);
+
+    const int expKnobW = expanderArea.getWidth() / 5;
+    placeKnob(expThreshKnob,  expanderArea.removeFromLeft(expKnobW));
+    placeKnob(expRatioKnob,   expanderArea.removeFromLeft(expKnobW));
+    placeKnob(expAttackKnob,  expanderArea.removeFromLeft(expKnobW));
+    placeKnob(expReleaseKnob, expanderArea.removeFromLeft(expKnobW));
+    placeKnob(expKneeKnob,    expanderArea);
+
+    const int agKnobW = autoGainArea.getWidth() / 4;
+    placeKnob(autoGainTargetKnob,  autoGainArea.removeFromLeft(agKnobW));
+    placeKnob(autoGainAttackKnob,  autoGainArea.removeFromLeft(agKnobW));
+    placeKnob(autoGainReleaseKnob, autoGainArea.removeFromLeft(agKnobW));
+    placeKnob(autoGainMaxGainKnob, autoGainArea);
+
+    const int levKnobW = levelerArea.getWidth() / 4;
+    placeKnob(targetKnob,  levelerArea.removeFromLeft(levKnobW));
+    placeKnob(attackKnob,  levelerArea.removeFromLeft(levKnobW));
+    placeKnob(releaseKnob, levelerArea.removeFromLeft(levKnobW));
+    placeKnob(maxGainKnob, levelerArea);
+
+    placeKnob(ceilingKnob, limiterArea);
+
     const int lookKnobW = lookaheadArea.getWidth() / 2;
-    lookaheadKnob.setBounds(lookaheadArea.removeFromLeft(lookKnobW));
-    dryWetKnob.setBounds(lookaheadArea);
+    placeKnob(lookaheadKnob, lookaheadArea.removeFromLeft(lookKnobW));
+    placeKnob(dryWetKnob,    lookaheadArea);
 }
 
 // ── paint ─────────────────────────────────────────────────────────────────────
@@ -390,7 +437,8 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     auto area = getLocalBounds().reduced(8);
     auto topBarArea = area.removeFromTop(28); // top bar
     area.removeFromTop(6);
-    area.removeFromLeft(86); // meter column
+    area.removeFromLeft(76); // input meter column
+    area.removeFromRight(76); // output meter column
 
     auto historyArea = area.removeFromTop(120);
     area.removeFromTop(6);
@@ -401,15 +449,17 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     area.removeFromTop(6);
     auto botControls = area;
 
-    auto gateArea = topControls.removeFromLeft(topControls.getWidth() / 3 - 3);
+    int row1Usable = topControls.getWidth() - 12;
+    auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt((float) topControls.getWidth() * 0.65f - 3.0f));
+    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (5.0f / 12.0f)));
     topControls.removeFromLeft(6);
     auto autoGainArea = topControls;
 
-    auto levelerArea  = botControls.removeFromLeft(botControls.getWidth() / 2 - 3);
+    int row2Usable = botControls.getWidth() - 12;
+    auto levelerArea  = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
     botControls.removeFromLeft(6);
-    auto limiterArea   = botControls.removeFromLeft(botControls.getWidth() / 2 - 3);
+    auto limiterArea   = botControls.removeFromLeft(juce::roundToInt(row2Usable * (1.5f / 7.5f)));
     botControls.removeFromLeft(6);
     auto lookaheadArea = botControls;
 
@@ -464,14 +514,18 @@ void LufsNormalizerEditor::timerCallback()
     const float mom = processor.getMomentaryLUFS();
     const float st  = processor.getShortTermLUFS();
     const float intg = processor.getIntegratedLUFS();
+    const float targetLufs = processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load();
 
-    // Update LUFS display
-    lufsDisplay.setMomentaryLUFS (mom);
-    lufsDisplay.setShortTermLUFS (st);
-    lufsDisplay.setIntegratedLUFS(intg);
-    lufsDisplay.setTargetLUFS(
-        processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load());
-    lufsDisplay.repaint();
+    // Update input meter (raw audio)
+    inputMeter.setPeakDb(processor.getInputPeakDb());
+    inputMeter.setRmsDb(processor.getInputRmsDb());
+    inputMeter.repaint();
+
+    // Update output meter
+    outputMeter.setPeakDb(processor.getOutputPeakDb());
+    outputMeter.setRmsDb(processor.getOutputRmsDb());
+    outputMeter.setTargetLUFS(targetLufs);
+    outputMeter.repaint();
 
     // Update GR meter
     grMeter.setExpanderGR (processor.getExpanderGrDb());
@@ -480,13 +534,13 @@ void LufsNormalizerEditor::timerCallback()
     grMeter.setLimiterGR  (processor.getLimiterGrDb());
     grMeter.repaint();
 
-    // Update history (push every other tick → ~10 Hz)
+    // Update history (push every other tick -> ~10 Hz)
     if (++histTick >= 2)
     {
         histTick = 0;
-        levelHistory.pushValue(st);
-        levelHistory.setTargetLUFS(
-            processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load());
+        levelHistory.pushInputValue(processor.getInputRmsDb());
+        levelHistory.pushOutputValue(processor.getOutputRmsDb());
+        levelHistory.setTargetLUFS(targetLufs);
     }
 
     // Update readout labels
@@ -500,9 +554,13 @@ void LufsNormalizerEditor::timerCallback()
     shortTermLabel .setText("ST: " + fmt(st)   + " LUFS", juce::dontSendNotification);
     integratedLabel.setText("I: "  + fmt(intg) + " LUFS", juce::dontSendNotification);
 
-    // Colour-code integrated label
-    const float target = processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load();
-    const float diff   = intg - target;
+    // Output readout labels (same LUFS values — measured post-processing)
+    outMomentaryLabel .setText("M: "  + fmt(mom)  + " LUFS", juce::dontSendNotification);
+    outShortTermLabel .setText("ST: " + fmt(st)   + " LUFS", juce::dontSendNotification);
+    outIntegratedLabel.setText("I: "  + fmt(intg) + " LUFS", juce::dontSendNotification);
+
+    // Colour-code integrated labels
+    const float diff = intg - targetLufs;
     juce::Colour intgColour = juce::Colours::lightgrey;
     if (intg > -140.0f)
     {
@@ -511,4 +569,5 @@ void LufsNormalizerEditor::timerCallback()
         else                            intgColour = juce::Colour(0xffff4444);
     }
     integratedLabel.setColour(juce::Label::textColourId, intgColour);
+    outIntegratedLabel.setColour(juce::Label::textColourId, intgColour);
 }
