@@ -74,3 +74,10 @@ target_link_libraries(LufsNormalizer PRIVATE
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags
 )
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+enable_testing()
+
+add_executable(DspUtilsTests tests/test_dsp_utils.cpp)
+target_include_directories(DspUtilsTests PRIVATE src)
+add_test(NAME DspUtilsTests COMMAND DspUtilsTests)
