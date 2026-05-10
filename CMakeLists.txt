@@ -87,3 +87,28 @@ target_include_directories(AutoGainTests PRIVATE src)
 target_compile_definitions(AutoGainTests PRIVATE JUCE_USE_CURL=0)
 target_link_libraries(AutoGainTests PRIVATE juce::juce_audio_basics juce::juce_dsp)
 add_test(NAME AutoGainTests COMMAND AutoGainTests)
+
+# ── Unit Tests ───────────────────────────────────────────────────────────────
+option(BUILD_TESTING "Build unit tests" ON)
+
+if(BUILD_TESTING)
+    add_executable(test_expander
+        tests/test_expander.cpp
+        src/dsp/Expander.cpp
+    )
+
+    target_include_directories(test_expander PRIVATE
+        src
+        tests/mocks
+    )
+
+    target_compile_definitions(test_expander PRIVATE
+        UNIT_TEST=1
+    )
+endif()
+# ── Tests ─────────────────────────────────────────────────────────────────────
+enable_testing()
+
+add_executable(DspUtilsTests tests/test_dsp_utils.cpp)
+target_include_directories(DspUtilsTests PRIVATE src)
+add_test(NAME DspUtilsTests COMMAND DspUtilsTests)
