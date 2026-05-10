@@ -75,6 +75,19 @@ target_link_libraries(LufsNormalizer PRIVATE
     juce::juce_recommended_warning_flags
 )
 
+# ── Tests ─────────────────────────────────────────────────────────────────────
+enable_testing()
+
+add_executable(DspUtilsTests tests/test_dsp_utils.cpp)
+target_include_directories(DspUtilsTests PRIVATE src)
+add_test(NAME DspUtilsTests COMMAND DspUtilsTests)
+
+add_executable(AutoGainTests tests/test_autogain.cpp src/dsp/AutoGain.cpp)
+target_include_directories(AutoGainTests PRIVATE src)
+target_compile_definitions(AutoGainTests PRIVATE JUCE_USE_CURL=0)
+target_link_libraries(AutoGainTests PRIVATE juce::juce_audio_basics juce::juce_dsp)
+add_test(NAME AutoGainTests COMMAND AutoGainTests)
+
 # ── Unit Tests ───────────────────────────────────────────────────────────────
 option(BUILD_TESTING "Build unit tests" ON)
 
