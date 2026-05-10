@@ -74,3 +74,22 @@ target_link_libraries(LufsNormalizer PRIVATE
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags
 )
+
+# ── Unit Tests ───────────────────────────────────────────────────────────────
+option(BUILD_TESTING "Build unit tests" ON)
+
+if(BUILD_TESTING)
+    add_executable(test_expander
+        tests/test_expander.cpp
+        src/dsp/Expander.cpp
+    )
+
+    target_include_directories(test_expander PRIVATE
+        src
+        tests/mocks
+    )
+
+    target_compile_definitions(test_expander PRIVATE
+        UNIT_TEST=1
+    )
+endif()
