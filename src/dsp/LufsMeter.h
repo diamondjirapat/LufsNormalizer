@@ -149,6 +149,9 @@ private:
     std::atomic<float> integratedLUFS { -144.0f };
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    struct HistogramSummary { double sum; int count; };
+    HistogramSummary calculateHistogramSummary(size_t startBin) const noexcept;
+
     static float msToLUFS(double ms) noexcept;
     void         updateIntegrated();
 

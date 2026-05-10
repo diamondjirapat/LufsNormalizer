@@ -186,61 +186,56 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
     }
 }
 
-// ── updateIntegrated ─────────────────────────────────────────────────────────
-void LufsMeter::updateIntegrated()
+// ── calculateHistogramSummary ────────────────────────────────────────────────────────────
+LufsMeter::HistogramSummary LufsMeter::calculateHistogramSummary(size_t startBin) const noexcept
 {
+    double sum = 0.0;
+    int count = 0;
 
-    // Pass 1: find average energy of all blocks >= -70 LUFS
-    double sum1 = 0.0;
-    int cnt1 = 0;
-
-    for (size_t i = 0; i < HISTOGRAM_BINS; ++i)
+    for (size_t i = startBin; i < HISTOGRAM_BINS; ++i)
     {
         if (histogram[i] > 0)
         {
             float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
             double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
-            sum1 += ms * histogram[i];
-            cnt1 += histogram[i];
+            sum += ms * histogram[i];
+            count += histogram[i];
         }
     }
 
-    if (cnt1 == 0)
+    return { sum, count };
+}
+
+// ── updateIntegrated ────────────────────────────────────────────────────────────
+void LufsMeter::updateIntegrated()
+{
+    // Pass 1: find average energy of all blocks >= -70 LUFS (absolute gate)
+    auto pass1 = calculateHistogramSummary(0);
+
+    if (pass1.count == 0)
     {
         integratedLUFS.store(-144.0f);
         return;
     }
 
     // Relative gate: -10 LU below ungated mean
-    const double ungatedMean = sum1 / (double)cnt1;
+    const double ungatedMean = pass1.sum / (double)pass1.count;
     const double relGateMS = ungatedMean * std::pow(10.0, -10.0 / 10.0);
     const float relGateLUFS = msToLUFS(relGateMS);
 
     // Pass 2: find average energy above relative gate
-    double sum2 = 0.0;
-    int cnt2 = 0;
-
     int startBin = (int)std::ceil((relGateLUFS - HISTOGRAM_MIN_LUFS) / 0.1f);
     startBin = std::max(0, std::min(startBin, (int)HISTOGRAM_BINS - 1));
 
-    for (size_t i = (size_t)startBin; i < HISTOGRAM_BINS; ++i)
-    {
-        if (histogram[i] > 0)
-        {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
-            sum2 += ms * histogram[i];
-            cnt2 += histogram[i];
-        }
-    }
+    auto pass2 = calculateHistogramSummary((size_t)startBin);
 
-    if (cnt2 == 0)
+    if (pass2.count == 0)
     {
         integratedLUFS.store(-144.0f);
         return;
     }
 
-    integratedLUFS.store(msToLUFS(sum2 / (double)cnt2));
+    integratedLUFS.store(msToLUFS(pass2.sum / (double)pass2.count));
 }
 
 // ── msToLUFS ─────────────────────────────────────────────────────────────────
