@@ -122,9 +122,16 @@ public:
     // ── Public accessors for the editor ──────────────────────────────────────
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
-    float getMomentaryLUFS()  const noexcept { return meter.getMomentaryLUFS();  }
-    float getShortTermLUFS()  const noexcept { return meter.getShortTermLUFS();  }
-    float getIntegratedLUFS() const noexcept { return meter.getIntegratedLUFS(); }
+    float getInputMomentaryLUFS()   const noexcept { return inputMeter.getMomentaryLUFS();  }
+    float getInputShortTermLUFS()   const noexcept { return inputMeter.getShortTermLUFS();  }
+    float getInputIntegratedLUFS()  const noexcept { return inputMeter.getIntegratedLUFS(); }
+
+    float getOutputMomentaryLUFS()  const noexcept { return outputMeter.getMomentaryLUFS();  }
+    float getOutputShortTermLUFS()  const noexcept { return outputMeter.getShortTermLUFS();  }
+    float getOutputIntegratedLUFS() const noexcept { return outputMeter.getIntegratedLUFS(); }
+
+    float getAnalysisShortTermLUFS() const noexcept { return analysisMeter.getShortTermLUFS(); }
+    float getAnalysisMomentaryLUFS() const noexcept { return analysisMeter.getMomentaryLUFS(); }
 
     float getLevelerGainDb()  const noexcept { return gainSmoother.getCurrentGainDb(); }
     float getAutoGainDb()     const noexcept { return autoGain.getCurrentGainDb(); }
@@ -140,7 +147,12 @@ public:
     /** Output RMS level in dBFS. */
     float getOutputRmsDb()   const noexcept { return outputRmsDb.load();  }
 
-    void resetIntegrated() { meter.reset(); }
+    void resetIntegrated() 
+    { 
+        inputMeter.reset();
+        analysisMeter.reset();
+        outputMeter.reset(); 
+    }
 
 private:
     // ── APVTS ─────────────────────────────────────────────────────────────────
@@ -152,7 +164,9 @@ private:
     juce::dsp::NoiseGate<float> gate;
     Expander       expander;
     AutoGain       autoGain;
-    LufsMeter      meter;
+    LufsMeter      inputMeter;
+    LufsMeter      analysisMeter;
+    LufsMeter      outputMeter;
     GainSmoother   gainSmoother;
     TruePeakLimiter limiter;
 

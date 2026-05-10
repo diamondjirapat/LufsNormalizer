@@ -155,7 +155,10 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
     gate       .prepare(spec);
     expander   .prepare(sampleRate, samplesPerBlock, numCh);
     autoGain   .prepare(sampleRate, samplesPerBlock, numCh);
-    meter      .prepare(sampleRate, samplesPerBlock, numCh);
+    inputMeter   .prepare(sampleRate, samplesPerBlock, numCh);
+    analysisMeter.prepare(sampleRate, samplesPerBlock, numCh);
+    outputMeter  .prepare(sampleRate, samplesPerBlock, numCh);
+
     gainSmoother.prepare(sampleRate, samplesPerBlock, numCh);
     limiter    .prepare(sampleRate, samplesPerBlock, numCh);
 
@@ -177,7 +180,10 @@ void LufsNormalizerProcessor::releaseResources()
     gate.reset();
     expander.reset();
     autoGain.reset();
-    meter.reset();
+    inputMeter.reset();
+    analysisMeter.reset();
+    outputMeter.reset();
+
     gainSmoother.reset();
     limiter.reset();
 }
@@ -211,6 +217,7 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     // ── Measure input levels (before any processing) ──────────────────────────
     measureLevels(buffer, inputPeakDb, inputRmsDb);
+    inputMeter.processBlock(buffer);
 
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
     const float wetAmount = pDryWet->load() * 0.01f; // 0..1
@@ -256,7 +263,7 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     autoGain.processBlock(buffer);
 
     // ── 4. LUFS measurement (on signal after autogain) ────────────────────────
-    meter.processBlock(buffer);
+    analysisMeter.processBlock(buffer);
 
     // ── 5. Compute leveler gain correction ────────────────────────────────────
     const bool levelerOn = pLevelerEnabled->load() > 0.5f;
@@ -264,8 +271,8 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (levelerOn)
     {
         const float targetLufs   = pTargetLufs->load();
-        const float measuredLufs = meter.getShortTermLUFS();
-        const float momLufs      = meter.getMomentaryLUFS();
+        const float measuredLufs = analysisMeter.getShortTermLUFS();
+        const float momLufs      = analysisMeter.getMomentaryLUFS();
         const float gateThresh   = pGateThreshold->load();
 
         // Guard against silence / unmeasured state.
@@ -310,6 +317,7 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     // ── Measure output levels (after full processing chain) ───────────────────
     measureLevels(buffer, outputPeakDb, outputRmsDb);
+    outputMeter.processBlock(buffer);
 }
 
 // ── syncDspParameters ────────────────────────────────────────────────────────
