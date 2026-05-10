@@ -12,13 +12,13 @@ public:
     void reset();
     
     void setEnabled(bool shouldBeEnabled) { enabled = shouldBeEnabled; }
-    void setTargetRmsDb(float targetDb)   { targetRmsDb = targetDb; }
+    void setTargetRmsDb(float targetDb);
     void setSpeedMs(float speedMs); // Kept for backward compat – sets both attack & release (MayB)
     void setAttackMs(float ms);
     void setReleaseMs(float ms);
-    void setMaxGainDb(float db)           { maxGainDb = db; }
+    void setMaxGainDb(float db);
     void setGateThresholdDb(float threshDb) { gateThresholdDb = threshDb; }
-    void setAllowReduce(bool allow)       { allowReduce = allow; }
+    void setAllowReduce(bool allow);
 
     void processBlock(juce::AudioBuffer<float>& buffer);
     
@@ -31,7 +31,12 @@ private:
     float gateThresholdDb = -60.0f;
     float maxGainDb = 12.0f;
     bool  allowReduce = false;
-    
+
+    // Cached linear values to avoid redundant pow calls
+    float targetRmsLinear = 0.125892541f; // 10^(-18/20)
+    float maxGainMult = 3.981071706f;      // 10^(12/20)
+    float minGainMult = 1.0f;              // allowReduce is false by default
+
     double sampleRate { 44100.0 };
     
     // Low-pass filter to calculate slow RMS

@@ -64,6 +64,37 @@ void AutoGain::setReleaseMs(float ms)
     releaseCoeff = 1.0f - std::exp(-1.0f / (clampedMs * 0.001f * safeSampleRate));
 }
 
+void AutoGain::setTargetRmsDb(float targetDb)
+{
+    if (std::abs(targetRmsDb - targetDb) < 1e-5f)
+        return;
+
+    targetRmsDb = targetDb;
+    targetRmsLinear = DspUtils::dbToGain(targetRmsDb);
+}
+
+void AutoGain::setMaxGainDb(float db)
+{
+    if (std::abs(maxGainDb - db) < 1e-5f)
+        return;
+
+    maxGainDb = db;
+    maxGainMult = DspUtils::dbToGain(maxGainDb);
+
+    // Update minGainMult if it depends on maxGainDb
+    if (allowReduce)
+        minGainMult = DspUtils::dbToGain(-maxGainDb);
+}
+
+void AutoGain::setAllowReduce(bool allow)
+{
+    if (allowReduce == allow)
+        return;
+
+    allowReduce = allow;
+    minGainMult = allowReduce ? DspUtils::dbToGain(-maxGainDb) : 1.0f;
+}
+
 void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
 {
     if (!enabled)
@@ -84,12 +115,6 @@ void AutoGain::processBlock(juce::AudioBuffer<float>& buffer)
     for (int ch = 0; ch < numChannels; ++ch)
         channelPointers[(size_t)ch] = buffer.getWritePointer(ch);
     const int safeChannels = std::min(numChannels, (int)channelPointers.size());
-
-    // Precalculate loop constants for performance
-    const float targetRmsLinear = std::pow(10.0f, targetRmsDb / 20.0f);
-    const float maxGainMult = std::pow(10.0f, maxGainDb / 20.0f);
-    // If allowReduce is on, allow negative gain down to -maxGainDb; otherwise clamp at unity (1.0)
-    const float minGainMult = allowReduce ? std::pow(10.0f, -maxGainDb / 20.0f) : 1.0f;
 
     // Process sample by sample
     for (int i = 0; i < numSamples; ++i)
