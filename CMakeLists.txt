@@ -93,3 +93,9 @@ if(BUILD_TESTING)
         UNIT_TEST=1
     )
 endif()
+# ── Tests ─────────────────────────────────────────────────────────────────────
+enable_testing()
+
+add_executable(DspUtilsTests tests/test_dsp_utils.cpp)
+target_include_directories(DspUtilsTests PRIVATE src)
+add_test(NAME DspUtilsTests COMMAND DspUtilsTests)

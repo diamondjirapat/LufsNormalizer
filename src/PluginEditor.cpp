@@ -511,9 +511,14 @@ void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
 // ── timerCallback ─────────────────────────────────────────────────────────────
 void LufsNormalizerEditor::timerCallback()
 {
-    const float mom = processor.getMomentaryLUFS();
-    const float st  = processor.getShortTermLUFS();
-    const float intg = processor.getIntegratedLUFS();
+    const float inMom  = processor.getInputMomentaryLUFS();
+    const float inSt   = processor.getInputShortTermLUFS();
+    const float inIntg = processor.getInputIntegratedLUFS();
+
+    const float outMom  = processor.getOutputMomentaryLUFS();
+    const float outSt   = processor.getOutputShortTermLUFS();
+    const float outIntg = processor.getOutputIntegratedLUFS();
+
     const float targetLufs = processor.getAPVTS().getRawParameterValue(ParamID::TARGET_LUFS)->load();
 
     // Update input meter (raw audio)
@@ -550,24 +555,25 @@ void LufsNormalizerEditor::timerCallback()
         return juce::String(v, 1);
     };
 
-    momentaryLabel .setText("M: "  + fmt(mom)  + " LUFS", juce::dontSendNotification);
-    shortTermLabel .setText("ST: " + fmt(st)   + " LUFS", juce::dontSendNotification);
-    integratedLabel.setText("I: "  + fmt(intg) + " LUFS", juce::dontSendNotification);
+    // Input readout labels
+    momentaryLabel .setText("M: "  + fmt(inMom)  + " LUFS", juce::dontSendNotification);
+    shortTermLabel .setText("ST: " + fmt(inSt)   + " LUFS", juce::dontSendNotification);
+    integratedLabel.setText("I: "  + fmt(inIntg) + " LUFS", juce::dontSendNotification);
 
-    // Output readout labels (same LUFS values — measured post-processing)
-    outMomentaryLabel .setText("M: "  + fmt(mom)  + " LUFS", juce::dontSendNotification);
-    outShortTermLabel .setText("ST: " + fmt(st)   + " LUFS", juce::dontSendNotification);
-    outIntegratedLabel.setText("I: "  + fmt(intg) + " LUFS", juce::dontSendNotification);
+    // Output readout labels
+    outMomentaryLabel .setText("M: "  + fmt(outMom)  + " LUFS", juce::dontSendNotification);
+    outShortTermLabel .setText("ST: " + fmt(outSt)   + " LUFS", juce::dontSendNotification);
+    outIntegratedLabel.setText("I: "  + fmt(outIntg) + " LUFS", juce::dontSendNotification);
 
-    // Colour-code integrated labels
-    const float diff = intg - targetLufs;
+    // Colour-code integrated labels (based on output vs target)
+    const float diff = outIntg - targetLufs;
     juce::Colour intgColour = juce::Colours::lightgrey;
-    if (intg > -140.0f)
+    if (outIntg > -140.0f)
     {
         if      (std::abs(diff) < 1.0f) intgColour = juce::Colour(0xff00ff88);
         else if (std::abs(diff) < 3.0f) intgColour = juce::Colour(0xffffcc00);
         else                            intgColour = juce::Colour(0xffff4444);
     }
-    integratedLabel.setColour(juce::Label::textColourId, intgColour);
     outIntegratedLabel.setColour(juce::Label::textColourId, intgColour);
+    integratedLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
 }
