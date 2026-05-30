@@ -89,10 +89,14 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     for (int ch = 0; ch < numCh; ++ch)
     {
         const float* ptr = upBlock.getChannelPointer((size_t)ch);
-        for (int i = 0; i < upSamples; ++i)
+        for (int i = 0; i < numSamples; ++i)
         {
-            const int origIdx = std::min(i / kOversamplingFactor, numSamples - 1);
-            perSamplePeak[(size_t)origIdx] = std::max(perSamplePeak[(size_t)origIdx], std::abs(ptr[i]));
+            float peak = 0.0f;
+            const float* subPtr = ptr + (i * kOversamplingFactor);
+            for (int j = 0; j < kOversamplingFactor; ++j)
+                peak = std::max(peak, std::abs(subPtr[j]));
+
+            perSamplePeak[(size_t)i] = std::max(perSamplePeak[(size_t)i], peak);
         }
     }
 
