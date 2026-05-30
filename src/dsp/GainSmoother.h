@@ -46,7 +46,7 @@ public:
     int getLatencySamples() const noexcept { return lookaheadSamples; }
 
 private:
-    double sampleRate_  = 44100.0;
+    double sampleRate_  = 48000.0;
     int    numChannels_ = 2;
 
     // ── Smoothing state ───────────────────────────────────────────────────────

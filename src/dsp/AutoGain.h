@@ -32,7 +32,7 @@ private:
     float maxGainDb = 12.0f;
     bool  allowReduce = false;
     
-    double sampleRate { 44100.0 };
+    double sampleRate { 48000.0 };
     
     // Low-pass filter to calculate slow RMS
     juce::dsp::FirstOrderTPTFilter<float> rmsFilter;

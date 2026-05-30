@@ -39,7 +39,7 @@ public:
     float getGainReductionDb() const noexcept { return gainReductionDb.load(); }
 
 private:
-    double sampleRate_  = 44100.0;
+    double sampleRate_  = 48000.0;
     int    numChannels_ = 2;
 
     // ── Parameters (atomic for thread-safe writes from message thread) ───────

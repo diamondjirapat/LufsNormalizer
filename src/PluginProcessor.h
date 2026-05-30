@@ -78,7 +78,7 @@ struct Preset
 };
 
 inline constexpr Preset kPresets[] = {
-    //                 name         tgt   atk   rel   max   eT    eR   eK    agT   agAtk agRel agMax  gT     lC
+    //  name            tgt     atk     rel    max     eT     eR    eK     agT    agAtk    agRel   agMax    gT     lC
     { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -18.0f, 500.0f, 1000.0f, 12.0f, -60.0f, -1.0f },
     { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -18.0f, 400.0f,  800.0f, 12.0f, -55.0f, -1.0f },
     { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -20.0f, 300.0f,  600.0f, 12.0f, -50.0f, -2.0f },
@@ -147,11 +147,11 @@ public:
     /** Output RMS level in dBFS. */
     float getOutputRmsDb()   const noexcept { return outputRmsDb.load();  }
 
-    void resetIntegrated() 
-    { 
+    void resetIntegrated()
+    {
         inputMeter.reset();
         analysisMeter.reset();
-        outputMeter.reset(); 
+        outputMeter.reset();
     }
 
 private:

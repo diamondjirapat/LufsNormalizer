@@ -140,7 +140,7 @@ private:
     int                     gatedBlockSize    = 0;   // samples per 100 ms
 
     // ── State ────────────────────────────────────────────────────────────────
-    double sampleRate_  = 44100.0;
+    double sampleRate_  = 48000.0;
     int    numChannels_ = 2;
 
     // ── Atomic results ───────────────────────────────────────────────────────

@@ -484,7 +484,7 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
 
     g.setFont(juce::Font(juce::FontOptions(11.0f)));
     g.setColour(juce::Colour(0xff606575));
-    g.drawText("v1.1  |  BS.1770-4",
+    g.drawText("v1.2  |  BS.1770-4",
                topBarArea.withTrimmedLeft(410),
                juce::Justification::centredLeft, false);
 }
