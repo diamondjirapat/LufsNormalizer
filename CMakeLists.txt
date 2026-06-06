@@ -126,6 +126,10 @@ if(BUILD_TESTING)
         src
     )
 
+    target_link_libraries(DspUtilsTests PRIVATE
+        juce::juce_audio_basics
+    )
+
     add_test(NAME DspUtilsTests COMMAND DspUtilsTests)
 
     # -------------------------------------------------------------------------

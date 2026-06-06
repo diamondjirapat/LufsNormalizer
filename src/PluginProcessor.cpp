@@ -8,6 +8,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 LufsNormalizerProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    const juce::AudioParameterFloatAttributes::StringFromValue compactValueText =
+        [] (float value, int)
+        {
+            const int rounded = juce::roundToInt(value);
+            if (std::abs(value - (float) rounded) < 0.05f)
+                return juce::String(rounded);
+
+            return juce::String(value, 1);
+        };
+
+    const auto floatAttr = [&compactValueText] (const juce::String& label)
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withLabel(label)
+            .withStringFromValueFunction(compactValueText);
+    };
 
     // ── Gate ──────────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -16,17 +32,17 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::GATE_THRESHOLD, "Gate Thresh",
         juce::NormalisableRange<float>(-100.0f, 0.0f, 0.1f), -60.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::GATE_ATTACK, "Gate Attack",
         juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.5f), 5.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::GATE_RELEASE, "Gate Release",
         juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     // ── Expander ──────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -35,28 +51,28 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::EXP_THRESHOLD, "Exp Threshold",
         juce::NormalisableRange<float>(-80.0f, -10.0f, 0.1f), -40.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::EXP_RATIO, "Exp Ratio",
         juce::NormalisableRange<float>(1.0f, 10.0f, 0.1f), 2.0f,
-        juce::AudioParameterFloatAttributes().withLabel(":1")));
+        floatAttr(":1")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::EXP_ATTACK, "Exp Attack",
         juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.5f), 10.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
 
         ParamID::EXP_RELEASE, "Exp Release",
         juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::EXP_KNEE, "Exp Knee",
         juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 6.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     // ── Compressor ──────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -65,27 +81,27 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::COMP_THRESHOLD, "Comp Thresh",
         juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -20.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::COMP_RATIO, "Comp Ratio",
         juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f), 2.0f,
-        juce::AudioParameterFloatAttributes().withLabel(":1")));
+        floatAttr(":1")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::COMP_ATTACK, "Comp Attack",
         juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.5f), 10.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::COMP_RELEASE, "Comp Release",
         juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::COMP_MAKEUP, "Comp Makeup",
         juce::NormalisableRange<float>(-24.0f, 24.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         ParamID::COMP_AUTO_MAKEUP, "Auto Makeup", true));
@@ -94,7 +110,7 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::TARGET_LUFS, "Target LUFS",
         juce::NormalisableRange<float>(-36.0f, -6.0f, 0.1f), -16.0f,
-        juce::AudioParameterFloatAttributes().withLabel("LUFS")));
+        floatAttr("LUFS")));
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         ParamID::LEVELER_ENABLED, "Leveler On", true));
@@ -102,17 +118,17 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::ATTACK_MS, "Leveler Attack",
         juce::NormalisableRange<float>(10.0f, 2000.0f, 1.0f, 0.4f), 200.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::RELEASE_MS, "Leveler Release",
         juce::NormalisableRange<float>(50.0f, 5000.0f, 1.0f, 0.4f), 500.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::MAX_GAIN_DB, "Max Gain",
         juce::NormalisableRange<float>(0.0f, 36.0f, 0.1f), 24.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")));
+        floatAttr("dB")));
 
     // ── True-peak limiter ─────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -121,7 +137,7 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::LIMITER_CEILING, "TP Ceiling",
         juce::NormalisableRange<float>(-6.0f, 0.0f, 0.1f), -1.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dBTP")));
+        floatAttr("dBTP")));
 
     // ── Lookahead ─────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -130,13 +146,13 @@ LufsNormalizerProcessor::createParameterLayout()
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::LOOKAHEAD_MS, "Lookahead",
         juce::NormalisableRange<float>(1.0f, 50.0f, 0.5f), 5.0f,
-        juce::AudioParameterFloatAttributes().withLabel("ms")));
+        floatAttr("ms")));
 
     // ── Dry/Wet Mix ───────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamID::DRY_WET, "Mix",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f,
-        juce::AudioParameterFloatAttributes().withLabel("%")));
+        floatAttr("%")));
 
     return { params.begin(), params.end() };
 }
@@ -397,27 +413,43 @@ void LufsNormalizerProcessor::cacheParameterPointers()
 // ── Presets ───────────────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::setCurrentProgram(int index)
 {
-    currentProgram = index;
-    if (index == 0) return; // "Custom" – don't overwrite
+    currentProgram = std::clamp(index, 0, (int)std::size(kPresets));
+    if (currentProgram == 0) return; // "Custom" – don't overwrite
 
-    const int presetIdx = index - 1;
+    const int presetIdx = currentProgram - 1;
     if (presetIdx < 0 || presetIdx >= (int)std::size(kPresets)) return;
 
     const auto& p = kPresets[presetIdx];
 
     auto setParam = [&](const char* id, float value) {
-        apvts.getParameter(id)->setValueNotifyingHost(
-            apvts.getParameterRange(id).convertTo0to1(value));
+        if (auto* param = apvts.getParameter(id))
+            param->setValueNotifyingHost(apvts.getParameterRange(id).convertTo0to1(value));
     };
+
+    // Module toggles
+    setParam(ParamID::GATE_ENABLED,      p.gateEnabled);
+    setParam(ParamID::EXP_ENABLED,       p.expEnabled);
+    setParam(ParamID::COMP_ENABLED,      p.compEnabled);
+    setParam(ParamID::LEVELER_ENABLED,   p.levelerEnabled);
+    setParam(ParamID::LIMITER_ENABLED,   p.limiterEnabled);
+    setParam(ParamID::LOOKAHEAD_ENABLED, p.lookaheadEnabled);
 
     // Leveler
     setParam(ParamID::TARGET_LUFS,   p.targetLufs);
     setParam(ParamID::ATTACK_MS,     p.attackMs);
     setParam(ParamID::RELEASE_MS,    p.releaseMs);
     setParam(ParamID::MAX_GAIN_DB,   p.maxGainDb);
+
+    // Gate
+    setParam(ParamID::GATE_THRESHOLD, p.gateThreshold);
+    setParam(ParamID::GATE_ATTACK,    p.gateAttack);
+    setParam(ParamID::GATE_RELEASE,   p.gateRelease);
+
     // Expander
     setParam(ParamID::EXP_THRESHOLD, p.expThreshold);
     setParam(ParamID::EXP_RATIO,     p.expRatio);
+    setParam(ParamID::EXP_ATTACK,    p.expAttack);
+    setParam(ParamID::EXP_RELEASE,   p.expRelease);
     setParam(ParamID::EXP_KNEE,      p.expKnee);
     // Compressor
     setParam(ParamID::COMP_THRESHOLD, p.compThreshold);
@@ -426,10 +458,14 @@ void LufsNormalizerProcessor::setCurrentProgram(int index)
     setParam(ParamID::COMP_RELEASE,   p.compRelease);
     setParam(ParamID::COMP_MAKEUP,    p.compMakeup);
     setParam(ParamID::COMP_AUTO_MAKEUP, p.compAutoMakeup);
-    // Gate
-    setParam(ParamID::GATE_THRESHOLD, p.gateThreshold);
     // Limiter
     setParam(ParamID::LIMITER_CEILING, p.limiterCeiling);
+
+    // Lookahead and mix
+    setParam(ParamID::LOOKAHEAD_MS, p.lookaheadMs);
+    setParam(ParamID::DRY_WET,      p.dryWet);
+
+    syncDspParameters();
 }
 
 const juce::String LufsNormalizerProcessor::getProgramName(int index)

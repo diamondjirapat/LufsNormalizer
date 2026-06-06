@@ -56,22 +56,25 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
     const float ceiling  = DspUtils::dbToGain(ceilingDb.load());
     if (numSamples > (int)perSamplePeak.size())
-        perSamplePeak.resize((size_t) numSamples, 0.0f);
+        perSamplePeak.resize((size_t) numSamples, 0.0f); // Fast path assumes we rarely resize, but we should handle it.
 
     // ── Store original input to lookahead buffer ──────────────────────────────
     const int bufLen = lookaheadBuffer.getNumSamples();
-    std::vector<float*> inputPointers((size_t) numCh);
-    std::vector<float*> lookaheadPointers((size_t) numCh);
-    for (int ch = 0; ch < numCh; ++ch)
+    
+    const int maxCh = 2;
+    const int channelsToProcess = std::min(numCh, maxCh);
+    float* inputPointers[maxCh];
+    float* lookaheadPointers[maxCh];
+    for (int ch = 0; ch < channelsToProcess; ++ch)
     {
-        inputPointers[(size_t) ch] = buffer.getWritePointer(ch);
-        lookaheadPointers[(size_t) ch] = lookaheadBuffer.getWritePointer(ch);
+        inputPointers[ch] = buffer.getWritePointer(ch);
+        lookaheadPointers[ch] = lookaheadBuffer.getWritePointer(ch);
     }
     int tempWritePos = writePos;
     for (int i = 0; i < numSamples; ++i)
     {
-        for (int ch = 0; ch < numCh; ++ch)
-            lookaheadPointers[(size_t) ch][tempWritePos] = inputPointers[(size_t) ch][i];
+        for (int ch = 0; ch < channelsToProcess; ++ch)
+            lookaheadPointers[ch][tempWritePos] = inputPointers[ch][i];
         tempWritePos = (tempWritePos + 1) % bufLen;
     }
 
@@ -84,7 +87,7 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     // Each original sample corresponds to kOversamplingFactor upsampled samples
     std::fill(perSamplePeak.begin(), perSamplePeak.begin() + numSamples, 0.0f);
 
-    for (int ch = 0; ch < numCh; ++ch)
+    for (int ch = 0; ch < channelsToProcess; ++ch)
     {
         const float* ptr = upBlock.getChannelPointer((size_t)ch);
         for (int i = 0; i < numSamples; ++i)
@@ -99,8 +102,8 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     }
 
     // ── Smooth gain per-sample (fast attack ~0.1 ms, slow release ~50 ms) ────
-    const float attCoeff = std::exp(-1.0f / (float)(0.0001 * sampleRate_));
-    const float relCoeff = std::exp(-1.0f / (float)(0.050  * sampleRate_));
+    const float attCoeff = DspUtils::msToCoeff(0.1f, sampleRate_);
+    const float relCoeff = DspUtils::msToCoeff(50.0f, sampleRate_);
 
     // Flush oversampling state. This will overwrite `buffer`, which is fine
     // because we have the original samples in the lookahead buffer.
@@ -125,9 +128,9 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
 
         const int readPos = (writePos - lookaheadSamples + bufLen) % bufLen;
 
-        for (int ch = 0; ch < numCh; ++ch)
+        for (int ch = 0; ch < channelsToProcess; ++ch)
         {
-            inputPointers[(size_t) ch][i] = lookaheadPointers[(size_t) ch][readPos] * smoothedGain;
+            inputPointers[ch][i] = lookaheadPointers[ch][readPos] * smoothedGain;
         }
 
         writePos = (writePos + 1) % bufLen;

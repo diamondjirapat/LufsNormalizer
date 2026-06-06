@@ -39,9 +39,10 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
         return;
     }
 
-    std::vector<float*> channelPointers((size_t) numCh);
-    for (int ch = 0; ch < numCh; ++ch)
-        channelPointers[(size_t) ch] = buffer.getWritePointer(ch);
+    float* channelPointers[2] = {nullptr, nullptr};
+    const int channelsToProcess = std::min(numCh, 2);
+    for (int ch = 0; ch < channelsToProcess; ++ch)
+        channelPointers[ch] = buffer.getWritePointer(ch);
 
     // Snapshot parameters (avoid repeated atomic loads in inner loop)
     const float thresh  = thresholdDb.load();
@@ -61,13 +62,13 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
     {
         // ── Level detection: max RMS across channels ─────────────────────────
         float maxRmsSquared = 0.0f;
-        for (int ch = 0; ch < numCh; ++ch)
+        for (int ch = 0; ch < channelsToProcess; ++ch)
         {
-            const float s = channelPointers[(size_t) ch][i];
+            const float s = channelPointers[ch][i];
             // 1-pole IIR on squared signal → RMS
-            rmsState[(size_t)ch] = rmsCoeff * rmsState[(size_t)ch]
+            rmsState[ch] = rmsCoeff * rmsState[ch]
                                  + (1.0f - rmsCoeff) * s * s;
-            maxRmsSquared = std::max(maxRmsSquared, std::max(0.0f, rmsState[(size_t)ch]));
+            maxRmsSquared = std::max(maxRmsSquared, std::max(0.0f, rmsState[ch]));
         }
         const float maxRms = std::sqrt(maxRmsSquared);
 
@@ -89,8 +90,8 @@ void Expander::processBlock(juce::AudioBuffer<float>& buffer)
 
         // ── Apply gain ───────────────────────────────────────────────────────
         const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
-        for (int ch = 0; ch < numCh; ++ch)
-            channelPointers[(size_t) ch][i] *= linGain;
+        for (int ch = 0; ch < channelsToProcess; ++ch)
+            channelPointers[ch][i] *= linGain;
     }
 
     gainReductionDb.store(maxGrDb);

@@ -8,6 +8,7 @@ namespace DspUtils
 {
     constexpr float kMinLinear = 1.0e-10f;
     constexpr float kSilenceDb = -144.0f;
+    constexpr float kDbPerOctave = 6.020599913f;
 
     /**
      * Convert a time constant in milliseconds to a 1-pole smoothing coefficient.
@@ -25,16 +26,17 @@ namespace DspUtils
 
     inline float dbToGain(float db) noexcept
     {
-        return std::exp2(db / 6.020599913f);
+        return std::exp2(db / kDbPerOctave);
     }
 
     inline float gainToDb(float gain) noexcept
     {
-        return gain > kMinLinear ? 6.020599913f * std::log2(gain) : kSilenceDb;
+        return gain > kMinLinear ? kDbPerOctave * std::log2(gain) : kSilenceDb;
     }
 
     inline float powerToDb(float power) noexcept
     {
-        return power > kMinLinear ? 10.0f * std::log10(power) : kSilenceDb;
+        float p = std::max(0.0f, power);
+        return p > kMinLinear ? 10.0f * std::log10(p) : kSilenceDb;
     }
 }

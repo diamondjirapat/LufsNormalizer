@@ -60,13 +60,16 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
 
     const float attCoeff = DspUtils::msToCoeff(attackMs .load(), sampleRate_);
     const float relCoeff = DspUtils::msToCoeff(releaseMs.load(), sampleRate_);
-    std::vector<float*> writePointers((size_t) numCh);
-    std::vector<float*> delayPointers((size_t) numCh);
+    
+    // Real-time safety: up to 2 channels
+    float* writePointers[2] = {nullptr, nullptr};
+    float* delayPointers[2] = {nullptr, nullptr};
+    const int channelsToProcess = std::min(numCh, 2);
 
-    for (int ch = 0; ch < numCh; ++ch)
+    for (int ch = 0; ch < channelsToProcess; ++ch)
     {
-        writePointers[(size_t) ch] = buffer.getWritePointer(ch);
-        delayPointers[(size_t) ch] = delayBuffer.getWritePointer(ch);
+        writePointers[ch] = buffer.getWritePointer(ch);
+        delayPointers[ch] = delayBuffer.getWritePointer(ch);
     }
 
     if (lookaheadEnabled && lookaheadSamples > 0)
@@ -85,11 +88,11 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             // Write current sample into delay buffer, read delayed sample
             const int readPos = (delayWritePos - lookaheadSamples + bufLen) % bufLen;
 
-            for (int ch = 0; ch < numCh; ++ch)
+            for (int ch = 0; ch < channelsToProcess; ++ch)
             {
-                const float input = writePointers[(size_t) ch][i];
-                delayPointers[(size_t) ch][delayWritePos] = input;
-                writePointers[(size_t) ch][i] = delayPointers[(size_t) ch][readPos] * linGain;
+                const float input = writePointers[ch][i];
+                delayPointers[ch][delayWritePos] = input;
+                writePointers[ch][i] = delayPointers[ch][readPos] * linGain;
             }
 
             delayWritePos = (delayWritePos + 1) % bufLen;
@@ -105,8 +108,8 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             smoothedGainDb = coeff * smoothedGainDb + (1.0f - coeff) * targetGainDb_;
             const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
 
-            for (int ch = 0; ch < numCh; ++ch)
-                writePointers[(size_t) ch][i] *= linGain;
+            for (int ch = 0; ch < channelsToProcess; ++ch)
+                writePointers[ch][i] *= linGain;
         }
     }
 

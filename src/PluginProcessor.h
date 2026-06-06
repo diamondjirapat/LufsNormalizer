@@ -58,14 +58,27 @@ namespace ParamID
 struct Preset
 {
     const char* name;
+    // Module toggles
+    float gateEnabled;
+    float expEnabled;
+    float compEnabled;
+    float levelerEnabled;
+    float limiterEnabled;
+    float lookaheadEnabled;
     // Leveler
     float targetLufs;
     float attackMs;
     float releaseMs;
     float maxGainDb;
+    // Gate
+    float gateThreshold;
+    float gateAttack;
+    float gateRelease;
     // Expander
     float expThreshold;
     float expRatio;
+    float expAttack;
+    float expRelease;
     float expKnee;
     // Compressor
     float compThreshold;
@@ -74,19 +87,25 @@ struct Preset
     float compRelease;
     float compMakeup;
     float compAutoMakeup;
-    // Gate
-    float gateThreshold;
     // Limiter
     float limiterCeiling;
+    // Lookahead and mix
+    float lookaheadMs;
+    float dryWet;
 };
 
 inline constexpr Preset kPresets[] = {
-    //  name            tgt     atk     rel    max     eT     eR    eK     cT      cR    cAtk   cRel   cM   cAM   gT     lC
-    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -20.0f, 2.0f, 10.0f, 100.0f, 0.0f, 1.0f, -60.0f, -1.0f },
-    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -24.0f, 3.0f, 5.0f,  200.0f, 0.0f, 1.0f, -55.0f, -1.0f },
-    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -24.0f, 2.0f, 10.0f, 150.0f, 0.0f, 1.0f, -50.0f, -2.0f },
-    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -30.0f, 1.5f, 20.0f, 300.0f, 0.0f, 1.0f, -60.0f, -1.0f },
-    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -18.0f, 2.5f, 30.0f, 100.0f, 0.0f, 1.0f, -70.0f, -1.0f },
+    // name, toggles: gate exp comp leveler limiter lookahead,
+    // leveler: target attack release max, gate: threshold attack release,
+    // expander: threshold ratio attack release knee, compressor: threshold ratio attack release makeup autoMakeup,
+    // limiter: ceiling, lookahead: ms, mix: dry/wet
+    { "Streaming", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -14.0f, 300.0f,  600.0f, 24.0f, -60.0f,  5.0f, 100.0f, -45.0f, 2.0f, 10.0f, 100.0f, 6.0f, -20.0f, 2.0f, 10.0f, 100.0f, 0.0f, 1.0f, -1.0f, 5.0f, 100.0f },
+    { "Podcast",   1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -16.0f, 200.0f,  500.0f, 18.0f, -55.0f,  5.0f, 120.0f, -40.0f, 2.5f,  8.0f, 150.0f, 6.0f, -24.0f, 3.0f,  5.0f, 200.0f, 0.0f, 1.0f, -1.0f, 5.0f, 100.0f },
+    { "Broadcast", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -23.0f, 150.0f,  400.0f, 12.0f, -50.0f,  5.0f, 120.0f, -35.0f, 3.0f, 10.0f, 150.0f, 4.0f, -24.0f, 2.0f, 10.0f, 150.0f, 0.0f, 1.0f, -2.0f, 5.0f, 100.0f },
+    { "Film / TV", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -24.0f, 200.0f,  800.0f, 12.0f, -60.0f, 10.0f, 200.0f, -50.0f, 1.5f, 20.0f, 300.0f, 8.0f, -30.0f, 1.5f, 20.0f, 300.0f, 0.0f, 1.0f, -1.0f, 5.0f, 100.0f },
+    { "Music Master", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -14.0f, 400.0f, 1000.0f, 12.0f, -70.0f,  5.0f, 150.0f, -60.0f, 1.5f, 30.0f, 300.0f, 6.0f, -18.0f, 2.5f, 30.0f, 100.0f, 0.0f, 1.0f, -1.0f, 5.0f, 100.0f },
+    { "Vocal Speech", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -15.0f, 10.0f,  50.0f, 3.0f, -55.0f,  3.0f, 120.0f, -45.0f, 5.0f,  5.0f, 10.0f, 6.0f, -22.0f, 4.0f,  25.0f, 150.0f, -4.0f, 1.0f, -6.0f, 5.0f, 100.0f },
+    { "Vocal Singing (No Idea lol)", 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -10.0f, 50.0f,  1000.0f, 15.0f, -60.0f,  5.0f, 150.0f, -50.0f, 2.0f, 15.0f, 25.0f, 6.0f, -20.0f, 3.5f, 15.0f, 200.0f, 0.0f, 1.0f, -1.0f, 5.0f, 100.0f }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,7 +194,6 @@ private:
 
     // ── State ─────────────────────────────────────────────────────────────────
     int   currentProgram = 0;
-    float lastTargetLufs = -16.0f;
     juce::AudioBuffer<float> dryWetBuffer;
 
     // ── Cached parameter pointers (avoids string lookups per block) ───────────
@@ -209,9 +227,9 @@ private:
 
     // ── Metering state ────────────────────────────────────────────────────────
     std::atomic<float> inputPeakDb  { -100.0f };
-    std::atomic<float> outputPeakDb { -100.0f };
+    std::atomic<float> outputPeakDb { -144.0f };
     std::atomic<float> inputRmsDb   { -100.0f };
-    std::atomic<float> outputRmsDb  { -100.0f };
+    std::atomic<float> outputRmsDb  { -144.0f };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     void syncDspParameters();

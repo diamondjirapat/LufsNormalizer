@@ -20,6 +20,25 @@ float LufsDisplay::dbToY(float db, float height) const noexcept
     return norm * height;
 }
 
+void LufsDisplay::updatePeakHold()
+{
+    const float curPeakDb = peakDb.load();
+    if (curPeakDb > peakHoldDb)
+    {
+        peakHoldDb = curPeakDb;
+        peakHoldTicks = kPeakHoldFrames;
+    }
+    else if (peakHoldTicks > 0)
+    {
+        --peakHoldTicks;
+    }
+    else
+    {
+        peakHoldDb -= kPeakFallRate;
+        if (peakHoldDb < kMinDb) peakHoldDb = kMinDb;
+    }
+}
+
 void LufsDisplay::paint(juce::Graphics& g)
 {
     const float w = (float)meterArea.getWidth();
@@ -62,22 +81,6 @@ void LufsDisplay::paint(juce::Graphics& g)
     // ── Read current values ───────────────────────────────────────────────────
     const float curPeakDb = peakDb.load();
     const float curRmsDb  = rmsDb.load();
-
-    // ── Peak-hold logic ───────────────────────────────────────────────────────
-    if (curPeakDb > peakHoldDb)
-    {
-        peakHoldDb = curPeakDb;
-        peakHoldTicks = kPeakHoldFrames;
-    }
-    else if (peakHoldTicks > 0)
-    {
-        --peakHoldTicks;
-    }
-    else
-    {
-        peakHoldDb -= kPeakFallRate;
-        if (peakHoldDb < kMinDb) peakHoldDb = kMinDb;
-    }
 
     // ── RMS bar (wider, semi-transparent fill) ────────────────────────────────
     if (curRmsDb > kMinDb)

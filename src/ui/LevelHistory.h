@@ -20,7 +20,7 @@ public:
     /** Legacy single-value push (pushes to input). */
     void pushValue(float lufs);
 
-    void setTargetLUFS(float lufs) noexcept { targetLUFS = lufs; }
+    void setTargetLUFS(float lufs) noexcept { targetLUFS.store(lufs); }
 
     void paint(juce::Graphics& g) override;
 
@@ -31,7 +31,7 @@ private:
     int maxPoints;
     std::deque<float> inputHistory;
     std::deque<float> outputHistory;
-    float targetLUFS = -16.0f;
+    std::atomic<float> targetLUFS { -16.0f };
 
     float dbToY(float db, float height) const noexcept;
 };

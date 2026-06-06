@@ -55,7 +55,7 @@ void LevelHistory::paint(juce::Graphics& g)
     }
 
     // ── Target line ───────────────────────────────────────────────────────────
-    const float targetY = y + dbToY(targetLUFS, h);
+    const float targetY = y + dbToY(targetLUFS.load(), h);
     g.setColour(juce::Colour(0xffff9900).withAlpha(0.5f));
     g.drawLine(x, targetY, x + w, targetY, 1.5f);
 

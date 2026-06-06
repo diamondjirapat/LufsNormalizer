@@ -1,9 +1,6 @@
 #include "GainReductionMeter.h"
 #include <cmath>
 #include <algorithm>
-#include "GainReductionMeter.h"
-#include <cmath>
-#include <algorithm>
 
 GainReductionMeter::GainReductionMeter()
 {

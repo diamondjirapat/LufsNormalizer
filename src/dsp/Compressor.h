@@ -10,6 +10,7 @@ public:
 
     void prepare(double sampleRate, int maxBlockSize, int numChannels)
     {
+        sampleRate_ = sampleRate;
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)maxBlockSize, (juce::uint32)numChannels };
         compressor.prepare(spec);
         reset();
@@ -78,9 +79,13 @@ public:
             if (currentGrDb > 0.0f) currentGrDb = 0.0f;
         }
 
-        // Smooth GR for display
+        // Smooth GR for display (time constant roughly 50ms)
+        const float coeff = (currentGrDb < gainReductionDb.load()) 
+            ? std::exp(-1.0f / (float)(0.010 * sampleRate_)) 
+            : std::exp(-1.0f / (float)(0.050 * sampleRate_));
+            
         float smoothedGr = gainReductionDb.load();
-        smoothedGr = smoothedGr * 0.8f + currentGrDb * 0.2f;
+        smoothedGr = coeff * smoothedGr + (1.0f - coeff) * currentGrDb;
         gainReductionDb.store(smoothedGr);
     }
 
@@ -96,6 +101,7 @@ public:
 
 private:
     juce::dsp::Compressor<float> compressor;
+    double sampleRate_ = 48000.0;
 
     std::atomic<bool>  enabled     { true };
     std::atomic<float> thresholdDb { -20.0f };

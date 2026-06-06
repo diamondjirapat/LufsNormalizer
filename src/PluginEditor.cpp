@@ -92,17 +92,17 @@ void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
     g.setColour(juce::Colours::white);
     g.fillEllipse(thumbX, bounds.getCentreY() - thumbR, thumbR * 2.0f, thumbR * 2.0f);
 
-    g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
+    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
     g.setColour(on ? juce::Colours::white : juce::Colour(0xffa0a5b5));
     g.drawText(button.getButtonText(),
-               (int)(bx + w + 8.0f), 0,
-               (int)(bounds.getWidth() - w - 12.0f), (int)bounds.getHeight(),
-               juce::Justification::centredLeft, false);
+               (int)(bx + w + 6.0f), 0,
+               button.getWidth() - (int)(w + 10.0f), (int)bounds.getHeight(),
+               juce::Justification::centredLeft, true);
 }
 
 juce::Font DarkLookAndFeel::getLabelFont(juce::Label&)
 {
-    return juce::Font(juce::FontOptions(10.0f));
+    return juce::Font(juce::FontOptions(11.0f));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -115,13 +115,13 @@ void LabelledKnob::setup(juce::Component* parent, const juce::String& labelText)
 
     label.setText(labelText, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
-    label.setFont(juce::Font(juce::FontOptions(10.0f)));
+    label.setFont(juce::Font(juce::FontOptions(11.0f)));
     parent->addAndMakeVisible(label);
 }
 
 void LabelledKnob::setBounds(juce::Rectangle<int> area)
 {
-    const int labelH = 14;
+    const int labelH = 16;
     label .setBounds(area.removeFromBottom(labelH));
     slider.setBounds(area);
 }
@@ -147,7 +147,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
 
     // ── Gate section ──────────────────────────────────────────────────────────
     addAndMakeVisible(gateToggle);
-    gateKnob       .setup(this, "Threshold");
+    gateKnob       .setup(this, "Thresh");
     gateAttackKnob .setup(this, "Attack");
     gateReleaseKnob.setup(this, "Release");
 
@@ -160,7 +160,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
 
     // ── Compressor section ──────────────────────────────────────────────────
     addAndMakeVisible(compToggle);
-    compThreshKnob.setup(this, "Threshold");
+    compThreshKnob.setup(this, "Thresh");
     compRatioKnob.setup(this, "Ratio");
     compAttackKnob.setup(this, "Attack");
     compReleaseKnob.setup(this, "Release");
@@ -169,7 +169,7 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
 
     // ── Expander section ──────────────────────────────────────────────────────
     addAndMakeVisible(expanderToggle);
-    expThreshKnob .setup(this, "Threshold");
+    expThreshKnob .setup(this, "Thresh");
     expRatioKnob  .setup(this, "Ratio");
     expAttackKnob .setup(this, "Attack");
     expReleaseKnob.setup(this, "Release");
@@ -210,7 +210,8 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
                         &outMomentaryLabel, &outShortTermLabel, &outIntegratedLabel })
     {
         lbl->setJustificationType(juce::Justification::centred);
-        lbl->setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+        lbl->setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+        lbl->setMinimumHorizontalScale(0.7f);
         addAndMakeVisible(*lbl);
     }
 
@@ -273,17 +274,19 @@ void LufsNormalizerEditor::layoutComponents()
 {
     auto area = getLocalBounds().reduced(8);
 
+
     // ── Top bar: preset + reset ───────────────────────────────────────────────
-    auto topBar = area.removeFromTop(28);
-    presetLabel.setBounds(topBar.removeFromLeft(50));
-    presetCombo.setBounds(topBar.removeFromLeft(130));
-    topBar.removeFromLeft(8);
-    resetButton.setBounds(topBar.removeFromLeft(110).reduced(0, 2));
+    topBarArea = area.removeFromTop(28);
+    auto topBarCopy = topBarArea; // Use a copy for sub-layout
+    presetLabel.setBounds(topBarCopy.removeFromLeft(50));
+    presetCombo.setBounds(topBarCopy.removeFromLeft(280));
+    topBarCopy.removeFromLeft(8);
+    resetButton.setBounds(topBarCopy.removeFromLeft(132).reduced(0, 2));
 
     area.removeFromTop(6);
 
     // ── Left column: Input meter ──────────────────────────────────────────────
-    auto leftCol = area.removeFromLeft(70);
+    auto leftCol = area.removeFromLeft(80);
     inputMeter.setBounds(leftCol.removeFromTop(leftCol.getHeight() - 60));
 
     // LUFS readout labels below meter
@@ -294,7 +297,7 @@ void LufsNormalizerEditor::layoutComponents()
     area.removeFromLeft(6);
 
     // ── Right column: Output meter ──────────────────────────────────────────
-    auto rightCol = area.removeFromRight(70);
+    auto rightCol = area.removeFromRight(80);
     outputMeter.setBounds(rightCol.removeFromTop(rightCol.getHeight() - 60));
 
     // Output LUFS readout labels below meter
@@ -308,12 +311,12 @@ void LufsNormalizerEditor::layoutComponents()
     auto rightArea = area;
 
     // History graph at top
-    auto historyArea = rightArea.removeFromTop(120);
+    historyArea = rightArea.removeFromTop(120);
     levelHistory.setBounds(historyArea);
     rightArea.removeFromTop(6);
 
     // GR meter (Horizontal stacked bars now)
-    auto grArea = rightArea.removeFromTop(50);
+    grArea = rightArea.removeFromTop(50);
     grMeter.setBounds(grArea);
     rightArea.removeFromTop(6);
 
@@ -325,70 +328,76 @@ void LufsNormalizerEditor::layoutComponents()
 
     // Row 1: Gate (left) | Expander (mid) | Compressor (right)
     int row1Usable = topControls.getWidth() - 12;
-    auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
+    gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (4.0f / 12.0f)));
+    expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (4.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto compArea = topControls;
+    compArea = topControls;
 
     // Row 2: Leveler (left) | Limiter (mid) | Lookahead (right)
     int row2Usable = botControls.getWidth() - 12;
-    auto levelerArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
+    levelerArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
     botControls.removeFromLeft(6);
-    auto limiterArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (1.5f / 7.5f)));
+    limiterArea = botControls.removeFromLeft(juce::roundToInt(row2Usable * (1.5f / 7.5f)));
     botControls.removeFromLeft(6);
-    auto lookaheadArea = botControls;
+    lookaheadArea = botControls;
 
     // Process Titles for Row 1
-    gateArea.removeFromTop(8); 
-    auto gateTitleRow = gateArea.removeFromTop(24);
+    auto gateAreaCopy = gateArea;
+    gateAreaCopy.removeFromTop(8); 
+    auto gateTitleRow = gateAreaCopy.removeFromTop(24);
     gateTitleRow.removeFromLeft(8); 
-    gateToggle.setBounds(gateTitleRow.removeFromLeft(100));
-    gateArea.removeFromTop(8);
+    gateToggle.setBounds(gateTitleRow.removeFromLeft(90));
+    gateAreaCopy.removeFromTop(8);
 
-    expanderArea.removeFromTop(8); 
-    auto expTitleRow = expanderArea.removeFromTop(24);
+    auto expanderAreaCopy = expanderArea;
+    expanderAreaCopy.removeFromTop(8); 
+    auto expTitleRow = expanderAreaCopy.removeFromTop(24);
     expTitleRow.removeFromLeft(8); 
-    expanderToggle.setBounds(expTitleRow.removeFromLeft(100));
-    expanderArea.removeFromTop(8);
+    expanderToggle.setBounds(expTitleRow.removeFromLeft(120));
+    expanderAreaCopy.removeFromTop(8);
 
-    compArea.removeFromTop(8);
-    auto compTitleRow = compArea.removeFromTop(24);
+    auto compAreaCopy = compArea;
+    compAreaCopy.removeFromTop(8);
+    auto compTitleRow = compAreaCopy.removeFromTop(24);
     compTitleRow.removeFromLeft(8);
-    compToggle.setBounds(compTitleRow.removeFromLeft(100));
-    compAutoMakeupToggle.setBounds(compTitleRow.removeFromLeft(100));
-    compArea.removeFromTop(8);
+    compToggle.setBounds(compTitleRow.removeFromLeft(140));
+    compAutoMakeupToggle.setBounds(compTitleRow.removeFromLeft(140));
+    compAreaCopy.removeFromTop(8);
 
     // Process Titles for Row 2
-    levelerArea.removeFromTop(8); 
-    auto titleRow = levelerArea.removeFromTop(24);
+    auto levelerAreaCopy = levelerArea;
+    levelerAreaCopy.removeFromTop(8); 
+    auto titleRow = levelerAreaCopy.removeFromTop(24);
     titleRow.removeFromLeft(8); 
-    levelerToggle.setBounds(titleRow.removeFromLeft(100));
-    levelerArea.removeFromTop(8);
+    levelerToggle.setBounds(titleRow.removeFromLeft(110));
+    levelerAreaCopy.removeFromTop(8);
 
-    limiterArea.removeFromTop(8);
-    auto limTitleRow = limiterArea.removeFromTop(24);
-    limTitleRow.removeFromLeft(8);
-    limiterToggle.setBounds(limTitleRow.removeFromLeft(120));
-    limiterArea.removeFromTop(8);
+    auto limiterAreaCopy = limiterArea;
+    limiterAreaCopy.removeFromTop(8); 
+    auto limTitleRow = limiterAreaCopy.removeFromTop(24);
+    limTitleRow.removeFromLeft(8); 
+    limiterToggle.setBounds(limTitleRow.removeFromLeft(130));
+    limiterAreaCopy.removeFromTop(8);
 
-    lookaheadArea.removeFromTop(8);
-    auto lookTitleRow = lookaheadArea.removeFromTop(24);
+    auto lookaheadAreaCopy = lookaheadArea;
+    lookaheadAreaCopy.removeFromTop(8);
+    auto lookTitleRow = lookaheadAreaCopy.removeFromTop(24);
     lookTitleRow.removeFromLeft(8);
-    lookaheadToggle.setBounds(lookTitleRow.removeFromLeft(120));
-    lookaheadArea.removeFromTop(8);
+    lookaheadToggle.setBounds(lookTitleRow.removeFromLeft(130));
+    lookaheadAreaCopy.removeFromTop(8);
 
     // Calculate minimum uniform size for all knobs
     int minSlotW = std::min({
-        gateArea.getWidth() / 3,
-        expanderArea.getWidth() / 5,
-        compArea.getWidth() / 5,
-        levelerArea.getWidth() / 4,
-        limiterArea.getWidth() / 1,
-        lookaheadArea.getWidth() / 2
+        gateAreaCopy.getWidth() / 3,
+        expanderAreaCopy.getWidth() / 5,
+        compAreaCopy.getWidth() / 5,
+        levelerAreaCopy.getWidth() / 4,
+        limiterAreaCopy.getWidth() / 1,
+        lookaheadAreaCopy.getWidth() / 2
     });
 
-    int minSlotH = std::min(gateArea.getHeight(), levelerArea.getHeight());
+    int minSlotH = std::min(gateAreaCopy.getHeight(), levelerAreaCopy.getHeight());
 
     int finalKnobW = minSlotW;
     int finalKnobH = minSlotH;
@@ -398,36 +407,36 @@ void LufsNormalizerEditor::layoutComponents()
     };
 
     // Place Knobs
-    const int gateKnobW = gateArea.getWidth() / 3;
-    placeKnob(gateKnob,       gateArea.removeFromLeft(gateKnobW));
-    placeKnob(gateAttackKnob, gateArea.removeFromLeft(gateKnobW));
-    placeKnob(gateReleaseKnob,gateArea);
+    const int gateKnobW = gateAreaCopy.getWidth() / 3;
+    placeKnob(gateKnob,       gateAreaCopy.removeFromLeft(gateKnobW));
+    placeKnob(gateAttackKnob, gateAreaCopy.removeFromLeft(gateKnobW));
+    placeKnob(gateReleaseKnob,gateAreaCopy);
 
-    const int expKnobW = expanderArea.getWidth() / 5;
-    placeKnob(expThreshKnob,  expanderArea.removeFromLeft(expKnobW));
-    placeKnob(expRatioKnob,   expanderArea.removeFromLeft(expKnobW));
-    placeKnob(expAttackKnob,  expanderArea.removeFromLeft(expKnobW));
-    placeKnob(expReleaseKnob, expanderArea.removeFromLeft(expKnobW));
-    placeKnob(expKneeKnob,    expanderArea);
+    const int expKnobW = expanderAreaCopy.getWidth() / 5;
+    placeKnob(expThreshKnob,  expanderAreaCopy.removeFromLeft(expKnobW));
+    placeKnob(expRatioKnob,   expanderAreaCopy.removeFromLeft(expKnobW));
+    placeKnob(expAttackKnob,  expanderAreaCopy.removeFromLeft(expKnobW));
+    placeKnob(expReleaseKnob, expanderAreaCopy.removeFromLeft(expKnobW));
+    placeKnob(expKneeKnob,    expanderAreaCopy);
 
-    const int compKnobW = compArea.getWidth() / 5;
-    placeKnob(compThreshKnob,  compArea.removeFromLeft(compKnobW));
-    placeKnob(compRatioKnob,   compArea.removeFromLeft(compKnobW));
-    placeKnob(compAttackKnob,  compArea.removeFromLeft(compKnobW));
-    placeKnob(compReleaseKnob, compArea.removeFromLeft(compKnobW));
-    placeKnob(compMakeupKnob,  compArea);
+    const int compKnobW = compAreaCopy.getWidth() / 5;
+    placeKnob(compThreshKnob,  compAreaCopy.removeFromLeft(compKnobW));
+    placeKnob(compRatioKnob,   compAreaCopy.removeFromLeft(compKnobW));
+    placeKnob(compAttackKnob,  compAreaCopy.removeFromLeft(compKnobW));
+    placeKnob(compReleaseKnob, compAreaCopy.removeFromLeft(compKnobW));
+    placeKnob(compMakeupKnob,  compAreaCopy);
 
-    const int levKnobW = levelerArea.getWidth() / 4;
-    placeKnob(targetKnob,  levelerArea.removeFromLeft(levKnobW));
-    placeKnob(attackKnob,  levelerArea.removeFromLeft(levKnobW));
-    placeKnob(releaseKnob, levelerArea.removeFromLeft(levKnobW));
-    placeKnob(maxGainKnob, levelerArea);
+    const int levKnobW = levelerAreaCopy.getWidth() / 4;
+    placeKnob(targetKnob,  levelerAreaCopy.removeFromLeft(levKnobW));
+    placeKnob(attackKnob,  levelerAreaCopy.removeFromLeft(levKnobW));
+    placeKnob(releaseKnob, levelerAreaCopy.removeFromLeft(levKnobW));
+    placeKnob(maxGainKnob, levelerAreaCopy);
 
-    placeKnob(ceilingKnob, limiterArea);
+    placeKnob(ceilingKnob, limiterAreaCopy);
 
-    const int lookKnobW = lookaheadArea.getWidth() / 2;
-    placeKnob(lookaheadKnob, lookaheadArea.removeFromLeft(lookKnobW));
-    placeKnob(dryWetKnob,    lookaheadArea);
+    const int lookKnobW = lookaheadAreaCopy.getWidth() / 2;
+    placeKnob(lookaheadKnob, lookaheadAreaCopy.removeFromLeft(lookKnobW));
+    placeKnob(dryWetKnob,    lookaheadAreaCopy);
 }
 
 // ── paint ─────────────────────────────────────────────────────────────────────
@@ -436,65 +445,34 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     // Background flat dark grey
     g.fillAll(juce::Colour(0xff161618));
 
-    // Section backgrounds
-    auto area = getLocalBounds().reduced(8);
-    auto topBarArea = area.removeFromTop(28); // top bar
-    area.removeFromTop(6);
-    area.removeFromLeft(76); // input meter column
-    area.removeFromRight(76); // output meter column
-
-    auto historyArea = area.removeFromTop(120);
-    area.removeFromTop(6);
-    auto grArea = area.removeFromTop(50);
-    area.removeFromTop(6);
-
-    auto topControls = area.removeFromTop(juce::roundToInt((float) area.getHeight() * 0.5f - 3.0f));
-    area.removeFromTop(6);
-    auto botControls = area;
-
-    int row1Usable = topControls.getWidth() - 12;
-    auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
-    topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (4.0f / 12.0f)));
-    topControls.removeFromLeft(6);
-    auto compArea = topControls;
-
-    int row2Usable = botControls.getWidth() - 12;
-    auto levelerArea  = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
-    botControls.removeFromLeft(6);
-    auto limiterArea   = botControls.removeFromLeft(juce::roundToInt(row2Usable * (1.5f / 7.5f)));
-    botControls.removeFromLeft(6);
-    auto lookaheadArea = botControls;
-
     // Use lighter grey for panels
     const juce::Colour panelCol(0xff1c1d24);
 
-    drawSectionBackground(g, historyArea,  "",  panelCol);
-    drawSectionBackground(g, grArea,       "", panelCol); // GR meter background
-    drawSectionBackground(g, gateArea,     "",  panelCol);
-    drawSectionBackground(g, expanderArea, "",  panelCol);
-    drawSectionBackground(g, compArea,     "",  panelCol);
-    drawSectionBackground(g, levelerArea,  "",  panelCol);
-    drawSectionBackground(g, limiterArea,  "",  panelCol);
-    drawSectionBackground(g, lookaheadArea,"",  panelCol);
+    drawSectionBackground(g, historyArea,  panelCol);
+    drawSectionBackground(g, grArea,       panelCol);
+    drawSectionBackground(g, gateArea,     panelCol);
+    drawSectionBackground(g, expanderArea, panelCol);
+    drawSectionBackground(g, compArea,     panelCol);
+    drawSectionBackground(g, levelerArea,  panelCol);
+    drawSectionBackground(g, limiterArea,  panelCol);
+    drawSectionBackground(g, lookaheadArea,panelCol);
 
     // Plugin title (Centered in top bar, or right-aligned)
     g.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
     g.setColour(juce::Colour(0xff00d4ff));
     g.drawText("LUFS MASTER",
-               topBarArea.withTrimmedLeft(280),
+               topBarArea.withTrimmedLeft(380),
                juce::Justification::centredLeft, false);
 
     g.setFont(juce::Font(juce::FontOptions(11.0f)));
     g.setColour(juce::Colour(0xff606575));
     g.drawText("v1.2  |  BS.1770-4",
-               topBarArea.withTrimmedLeft(410),
+               topBarArea.withTrimmedLeft(510),
                juce::Justification::centredLeft, false);
 }
 
 void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
-    juce::Rectangle<int> area, const juce::String& title,
-    juce::Colour colour) const
+    juce::Rectangle<int> area, juce::Colour colour) const
 {
     g.setColour(colour);
     g.fillRoundedRectangle(area.toFloat(), 6.0f);
@@ -502,13 +480,6 @@ void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
     // Very subtle border for modern flat aesthetic
     g.setColour(juce::Colour(0xff2d2e38));
     g.drawRoundedRectangle(area.toFloat(), 6.0f, 1.0f);
-
-    if (title.isNotEmpty())
-    {
-        g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
-        g.setColour(juce::Colours::white);
-        g.drawText(title, area.withHeight(24).withTrimmedLeft(12), juce::Justification::centredLeft, false);
-    }
 }
 
 // ── timerCallback ─────────────────────────────────────────────────────────────

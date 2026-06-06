@@ -110,6 +110,7 @@ private:
 
     // ── LUFS readout labels ───────────────────────────────────────────────
     juce::Label momentaryLabel, shortTermLabel, integratedLabel;
+
     juce::Label outMomentaryLabel, outShortTermLabel, outIntegratedLabel;
 
     // ── APVTS attachments ─────────────────────────────────────────────────────
@@ -133,8 +134,17 @@ private:
     void buildAttachments();
     void layoutComponents();
     void drawSectionBackground(juce::Graphics& g, juce::Rectangle<int> area,
-                               const juce::String& title,
                                juce::Colour colour) const;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LufsNormalizerEditor)
+    juce::Rectangle<int> topBarArea;
+    juce::Rectangle<int> historyArea;
+    juce::Rectangle<int> grArea;
+    juce::Rectangle<int> gateArea;
+    juce::Rectangle<int> expanderArea;
+    juce::Rectangle<int> compArea;
+    juce::Rectangle<int> levelerArea;
+    juce::Rectangle<int> limiterArea;
+    juce::Rectangle<int> lookaheadArea;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LufsNormalizerEditor)
 };
