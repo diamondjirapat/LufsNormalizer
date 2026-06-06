@@ -48,6 +48,7 @@ LufsNormalizerProcessor::createParameterLayout()
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
+
         ParamID::EXP_RELEASE, "Exp Release",
         juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
@@ -57,32 +58,37 @@ LufsNormalizerProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 6.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
-    // ── AutoGain ──────────────────────────────────────────────────────────────
+    // ── Compressor ──────────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        ParamID::AUTOGAIN_ENABLED, "AutoGain On", true));
+        ParamID::COMP_ENABLED, "Comp On", true));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::AUTOGAIN_TARGET, "AutoGain Target",
-        juce::NormalisableRange<float>(-36.0f, 0.0f, 0.1f), -18.0f,
-        juce::AudioParameterFloatAttributes().withLabel("RMS")));
+        ParamID::COMP_THRESHOLD, "Comp Thresh",
+        juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -20.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::AUTOGAIN_ATTACK, "AutoGain Attack",
-        juce::NormalisableRange<float>(10.0f, 5000.0f, 1.0f, 0.4f), 500.0f,
+        ParamID::COMP_RATIO, "Comp Ratio",
+        juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f), 2.0f,
+        juce::AudioParameterFloatAttributes().withLabel(":1")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamID::COMP_ATTACK, "Comp Attack",
+        juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.5f), 10.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::AUTOGAIN_RELEASE, "AutoGain Release",
-        juce::NormalisableRange<float>(50.0f, 5000.0f, 1.0f, 0.4f), 1000.0f,
+        ParamID::COMP_RELEASE, "Comp Release",
+        juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.5f), 100.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        ParamID::AUTOGAIN_MAXGAIN, "AutoGain Max Gain",
-        juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 12.0f,
+        ParamID::COMP_MAKEUP, "Comp Makeup",
+        juce::NormalisableRange<float>(-24.0f, 24.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        ParamID::AUTOGAIN_REDUCE, "AutoGain Reduce", false));
+        ParamID::COMP_AUTO_MAKEUP, "Auto Makeup", true));
 
     // ── LUFS Leveler ──────────────────────────────────────────────────────────
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -154,7 +160,7 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, (juce::uint32)numCh };
     gate       .prepare(spec);
     expander   .prepare(sampleRate, samplesPerBlock, numCh);
-    autoGain   .prepare(sampleRate, samplesPerBlock, numCh);
+    compressor .prepare(sampleRate, samplesPerBlock, numCh);
     inputMeter   .prepare(sampleRate, samplesPerBlock, numCh);
     analysisMeter.prepare(sampleRate, samplesPerBlock, numCh);
     outputMeter  .prepare(sampleRate, samplesPerBlock, numCh);
@@ -179,7 +185,7 @@ void LufsNormalizerProcessor::releaseResources()
     dryWetBuffer.setSize(0, 0);
     gate.reset();
     expander.reset();
-    autoGain.reset();
+    compressor.reset();
     inputMeter.reset();
     analysisMeter.reset();
     outputMeter.reset();
@@ -259,10 +265,10 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // ── 2. Expander ───────────────────────────────────────────────────────────
     expander.processBlock(buffer);
 
-    // ── 3. AutoGain ───────────────────────────────────────────────────────────
-    autoGain.processBlock(buffer);
+    // ── 3. Compressor ───────────────────────────────────────────────────────────
+    compressor.processBlock(buffer);
 
-    // ── 4. LUFS measurement (on signal after autogain) ────────────────────────
+    // ── 4. LUFS measurement (on signal after compressor) ────────────────────────
     analysisMeter.processBlock(buffer);
 
     // ── 5. Compute leveler gain correction ────────────────────────────────────
@@ -336,14 +342,14 @@ void LufsNormalizerProcessor::syncDspParameters()
     expander.setReleaseMs  (pExpRelease->load());
     expander.setKneeDb     (pExpKnee->load());
 
-    // AutoGain
-    autoGain.setEnabled    (pAutoGainEnabled->load() > 0.5f);
-    autoGain.setTargetRmsDb(pAutoGainTarget->load());
-    autoGain.setAttackMs   (pAutoGainAttack->load());
-    autoGain.setReleaseMs  (pAutoGainRelease->load());
-    autoGain.setMaxGainDb  (pAutoGainMaxGain->load());
-    autoGain.setAllowReduce(pAutoGainReduce->load() > 0.5f);
-    autoGain.setGateThresholdDb(pGateThreshold->load());
+    // Compressor
+    compressor.setEnabled    (pCompEnabled->load() > 0.5f);
+    compressor.setThresholdDb(pCompThreshold->load());
+    compressor.setRatio      (pCompRatio->load());
+    compressor.setAttackMs   (pCompAttack->load());
+    compressor.setReleaseMs  (pCompRelease->load());
+    compressor.setMakeupDb   (pCompMakeup->load());
+    compressor.setAutoMakeup (pCompAutoMakeup->load() > 0.5f);
 
     // Gain smoother
     gainSmoother.setAttackMs (pAttackMs->load());
@@ -369,12 +375,13 @@ void LufsNormalizerProcessor::cacheParameterPointers()
     pExpAttack       = apvts.getRawParameterValue(ParamID::EXP_ATTACK);
     pExpRelease      = apvts.getRawParameterValue(ParamID::EXP_RELEASE);
     pExpKnee         = apvts.getRawParameterValue(ParamID::EXP_KNEE);
-    pAutoGainEnabled = apvts.getRawParameterValue(ParamID::AUTOGAIN_ENABLED);
-    pAutoGainTarget  = apvts.getRawParameterValue(ParamID::AUTOGAIN_TARGET);
-    pAutoGainAttack  = apvts.getRawParameterValue(ParamID::AUTOGAIN_ATTACK);
-    pAutoGainRelease = apvts.getRawParameterValue(ParamID::AUTOGAIN_RELEASE);
-    pAutoGainMaxGain = apvts.getRawParameterValue(ParamID::AUTOGAIN_MAXGAIN);
-    pAutoGainReduce  = apvts.getRawParameterValue(ParamID::AUTOGAIN_REDUCE);
+    pCompEnabled     = apvts.getRawParameterValue(ParamID::COMP_ENABLED);
+    pCompThreshold   = apvts.getRawParameterValue(ParamID::COMP_THRESHOLD);
+    pCompRatio       = apvts.getRawParameterValue(ParamID::COMP_RATIO);
+    pCompAttack      = apvts.getRawParameterValue(ParamID::COMP_ATTACK);
+    pCompRelease     = apvts.getRawParameterValue(ParamID::COMP_RELEASE);
+    pCompMakeup      = apvts.getRawParameterValue(ParamID::COMP_MAKEUP);
+    pCompAutoMakeup  = apvts.getRawParameterValue(ParamID::COMP_AUTO_MAKEUP);
     pAttackMs        = apvts.getRawParameterValue(ParamID::ATTACK_MS);
     pReleaseMs       = apvts.getRawParameterValue(ParamID::RELEASE_MS);
     pMaxGainDb       = apvts.getRawParameterValue(ParamID::MAX_GAIN_DB);
@@ -412,11 +419,13 @@ void LufsNormalizerProcessor::setCurrentProgram(int index)
     setParam(ParamID::EXP_THRESHOLD, p.expThreshold);
     setParam(ParamID::EXP_RATIO,     p.expRatio);
     setParam(ParamID::EXP_KNEE,      p.expKnee);
-    // AutoGain
-    setParam(ParamID::AUTOGAIN_TARGET,  p.autoGainTarget);
-    setParam(ParamID::AUTOGAIN_ATTACK,  p.autoGainAttack);
-    setParam(ParamID::AUTOGAIN_RELEASE, p.autoGainRelease);
-    setParam(ParamID::AUTOGAIN_MAXGAIN, p.autoGainMaxGain);
+    // Compressor
+    setParam(ParamID::COMP_THRESHOLD, p.compThreshold);
+    setParam(ParamID::COMP_RATIO,     p.compRatio);
+    setParam(ParamID::COMP_ATTACK,    p.compAttack);
+    setParam(ParamID::COMP_RELEASE,   p.compRelease);
+    setParam(ParamID::COMP_MAKEUP,    p.compMakeup);
+    setParam(ParamID::COMP_AUTO_MAKEUP, p.compAutoMakeup);
     // Gate
     setParam(ParamID::GATE_THRESHOLD, p.gateThreshold);
     // Limiter

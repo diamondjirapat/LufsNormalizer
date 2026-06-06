@@ -70,13 +70,14 @@ private:
     LabelledKnob       releaseKnob;
     LabelledKnob       maxGainKnob;
 
-    // ── AutoGain section ──────────────────────────────────────────────────
-    juce::ToggleButton autoGainToggle { "AutoGain" };
-    juce::ToggleButton autoGainReduceToggle { "Reduce" };
-    LabelledKnob       autoGainTargetKnob;
-    LabelledKnob       autoGainAttackKnob;
-    LabelledKnob       autoGainReleaseKnob;
-    LabelledKnob       autoGainMaxGainKnob;
+    // ── Compressor section ──────────────────────────────────────────────────
+    juce::ToggleButton compToggle { "Compressor" };
+    LabelledKnob       compThreshKnob;
+    LabelledKnob       compRatioKnob;
+    LabelledKnob       compAttackKnob;
+    LabelledKnob       compReleaseKnob;
+    LabelledKnob       compMakeupKnob;
+    juce::ToggleButton compAutoMakeupToggle { "Auto Makeup" };
 
     // ── Expander section ──────────────────────────────────────────────────────
     juce::ToggleButton expanderToggle { "Expander" };
@@ -117,11 +118,12 @@ private:
 
     std::unique_ptr<SliderAttachment> targetAtt, attackAtt, releaseAtt, maxGainAtt;
     std::unique_ptr<SliderAttachment> gateAtt, gateAttackAtt, gateReleaseAtt;
-    std::unique_ptr<SliderAttachment> autoGainTargetAtt, autoGainAttackAtt, autoGainReleaseAtt, autoGainMaxGainAtt;
+    std::unique_ptr<SliderAttachment> compThreshAtt, compRatioAtt, compAttackAtt, compReleaseAtt, compMakeupAtt;
+    std::unique_ptr<ButtonAttachment> compAutoMakeupAtt;
     std::unique_ptr<SliderAttachment> expThreshAtt, expRatioAtt, expAttackAtt,
                                       expReleaseAtt, expKneeAtt;
     std::unique_ptr<SliderAttachment> ceilingAtt, lookaheadMsAtt, dryWetAtt;
-    std::unique_ptr<ButtonAttachment> gateOnAtt, autoGainOnAtt, autoGainReduceOnAtt, levelerOnAtt, 
+    std::unique_ptr<ButtonAttachment> gateOnAtt, compOnAtt, levelerOnAtt, 
                                       expanderOnAtt, limiterOnAtt, lookaheadOnAtt;
 
     // ── Timer ─────────────────────────────────────────────────────────────────

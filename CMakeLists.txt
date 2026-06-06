@@ -64,7 +64,6 @@ target_sources(LufsNormalizer PRIVATE
 
     src/dsp/LufsMeter.cpp
     src/dsp/Expander.cpp
-    src/dsp/AutoGain.cpp
     src/dsp/GainSmoother.cpp
     src/dsp/TruePeakLimiter.cpp
 
@@ -130,30 +129,6 @@ if(BUILD_TESTING)
     add_test(NAME DspUtilsTests COMMAND DspUtilsTests)
 
     # -------------------------------------------------------------------------
-    # Auto Gain Tests
-    # -------------------------------------------------------------------------
-
-    add_executable(AutoGainTests
-        tests/test_autogain.cpp
-        src/dsp/AutoGain.cpp
-    )
-
-    target_include_directories(AutoGainTests PRIVATE
-        src
-    )
-
-    target_compile_definitions(AutoGainTests PRIVATE
-        JUCE_USE_CURL=0
-    )
-
-    target_link_libraries(AutoGainTests PRIVATE
-        juce::juce_audio_basics
-        juce::juce_dsp
-    )
-
-    add_test(NAME AutoGainTests COMMAND AutoGainTests)
-
-    # -------------------------------------------------------------------------
     # Expander Tests
     # -------------------------------------------------------------------------
 
@@ -164,16 +139,18 @@ if(BUILD_TESTING)
 
     target_include_directories(test_expander PRIVATE
         src
-        tests/mocks
     )
 
     target_compile_definitions(test_expander PRIVATE
         UNIT_TEST=1
+        JUCE_USE_CURL=0
     )
 
     target_link_libraries(test_expander PRIVATE
         juce::juce_audio_basics
         juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
     )
 
     add_test(NAME ExpanderTests COMMAND test_expander)

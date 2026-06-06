@@ -158,13 +158,14 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     releaseKnob.setup(this, "Release");
     maxGainKnob.setup(this, "Max Gain");
 
-    // ── AutoGain section ──────────────────────────────────────────────────
-    addAndMakeVisible(autoGainToggle);
-    addAndMakeVisible(autoGainReduceToggle);
-    autoGainTargetKnob.setup(this, "Target");
-    autoGainAttackKnob.setup(this, "Attack");
-    autoGainReleaseKnob.setup(this, "Release");
-    autoGainMaxGainKnob.setup(this, "Max Gain");
+    // ── Compressor section ──────────────────────────────────────────────────
+    addAndMakeVisible(compToggle);
+    compThreshKnob.setup(this, "Threshold");
+    compRatioKnob.setup(this, "Ratio");
+    compAttackKnob.setup(this, "Attack");
+    compReleaseKnob.setup(this, "Release");
+    compMakeupKnob.setup(this, "Makeup");
+    addAndMakeVisible(compAutoMakeupToggle);
 
     // ── Expander section ──────────────────────────────────────────────────────
     addAndMakeVisible(expanderToggle);
@@ -238,12 +239,13 @@ void LufsNormalizerEditor::buildAttachments()
     gateReleaseAtt = std::make_unique<SliderAttachment>(apvts, ParamID::GATE_RELEASE,   gateReleaseKnob.slider);
     gateOnAtt      = std::make_unique<ButtonAttachment>(apvts, ParamID::GATE_ENABLED,   gateToggle);
 
-    autoGainTargetAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_TARGET,  autoGainTargetKnob.slider);
-    autoGainAttackAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_ATTACK,   autoGainAttackKnob.slider);
-    autoGainReleaseAtt = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_RELEASE,  autoGainReleaseKnob.slider);
-    autoGainMaxGainAtt = std::make_unique<SliderAttachment>(apvts, ParamID::AUTOGAIN_MAXGAIN,  autoGainMaxGainKnob.slider);
-    autoGainOnAtt      = std::make_unique<ButtonAttachment>(apvts, ParamID::AUTOGAIN_ENABLED,  autoGainToggle);
-    autoGainReduceOnAtt = std::make_unique<ButtonAttachment>(apvts, ParamID::AUTOGAIN_REDUCE,  autoGainReduceToggle);
+    compThreshAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::COMP_THRESHOLD, compThreshKnob.slider);
+    compRatioAtt   = std::make_unique<SliderAttachment>(apvts, ParamID::COMP_RATIO,     compRatioKnob.slider);
+    compAttackAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::COMP_ATTACK,    compAttackKnob.slider);
+    compReleaseAtt = std::make_unique<SliderAttachment>(apvts, ParamID::COMP_RELEASE,   compReleaseKnob.slider);
+    compMakeupAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::COMP_MAKEUP,    compMakeupKnob.slider);
+    compOnAtt      = std::make_unique<ButtonAttachment>(apvts, ParamID::COMP_ENABLED,   compToggle);
+    compAutoMakeupAtt = std::make_unique<ButtonAttachment>(apvts, ParamID::COMP_AUTO_MAKEUP, compAutoMakeupToggle);
 
     expThreshAtt  = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_THRESHOLD, expThreshKnob.slider);
     expRatioAtt   = std::make_unique<SliderAttachment>(apvts, ParamID::EXP_RATIO,     expRatioKnob.slider);
@@ -321,13 +323,13 @@ void LufsNormalizerEditor::layoutComponents()
     rightArea.removeFromTop(6);
     auto botControls = rightArea;
 
-    // Row 1: Gate (left) | Expander (mid) | AutoGain (right)
+    // Row 1: Gate (left) | Expander (mid) | Compressor (right)
     int row1Usable = topControls.getWidth() - 12;
     auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (5.0f / 12.0f)));
+    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (4.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto autoGainArea = topControls;
+    auto compArea = topControls;
 
     // Row 2: Leveler (left) | Limiter (mid) | Lookahead (right)
     int row2Usable = botControls.getWidth() - 12;
@@ -350,12 +352,12 @@ void LufsNormalizerEditor::layoutComponents()
     expanderToggle.setBounds(expTitleRow.removeFromLeft(100));
     expanderArea.removeFromTop(8);
 
-    autoGainArea.removeFromTop(8);
-    auto autoGainTitleRow = autoGainArea.removeFromTop(24);
-    autoGainTitleRow.removeFromLeft(8);
-    autoGainToggle.setBounds(autoGainTitleRow.removeFromLeft(100));
-    autoGainReduceToggle.setBounds(autoGainTitleRow);
-    autoGainArea.removeFromTop(8);
+    compArea.removeFromTop(8);
+    auto compTitleRow = compArea.removeFromTop(24);
+    compTitleRow.removeFromLeft(8);
+    compToggle.setBounds(compTitleRow.removeFromLeft(100));
+    compAutoMakeupToggle.setBounds(compTitleRow.removeFromLeft(100));
+    compArea.removeFromTop(8);
 
     // Process Titles for Row 2
     levelerArea.removeFromTop(8); 
@@ -380,7 +382,7 @@ void LufsNormalizerEditor::layoutComponents()
     int minSlotW = std::min({
         gateArea.getWidth() / 3,
         expanderArea.getWidth() / 5,
-        autoGainArea.getWidth() / 4,
+        compArea.getWidth() / 5,
         levelerArea.getWidth() / 4,
         limiterArea.getWidth() / 1,
         lookaheadArea.getWidth() / 2
@@ -408,11 +410,12 @@ void LufsNormalizerEditor::layoutComponents()
     placeKnob(expReleaseKnob, expanderArea.removeFromLeft(expKnobW));
     placeKnob(expKneeKnob,    expanderArea);
 
-    const int agKnobW = autoGainArea.getWidth() / 4;
-    placeKnob(autoGainTargetKnob,  autoGainArea.removeFromLeft(agKnobW));
-    placeKnob(autoGainAttackKnob,  autoGainArea.removeFromLeft(agKnobW));
-    placeKnob(autoGainReleaseKnob, autoGainArea.removeFromLeft(agKnobW));
-    placeKnob(autoGainMaxGainKnob, autoGainArea);
+    const int compKnobW = compArea.getWidth() / 5;
+    placeKnob(compThreshKnob,  compArea.removeFromLeft(compKnobW));
+    placeKnob(compRatioKnob,   compArea.removeFromLeft(compKnobW));
+    placeKnob(compAttackKnob,  compArea.removeFromLeft(compKnobW));
+    placeKnob(compReleaseKnob, compArea.removeFromLeft(compKnobW));
+    placeKnob(compMakeupKnob,  compArea);
 
     const int levKnobW = levelerArea.getWidth() / 4;
     placeKnob(targetKnob,  levelerArea.removeFromLeft(levKnobW));
@@ -452,9 +455,9 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     int row1Usable = topControls.getWidth() - 12;
     auto gateArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (3.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (5.0f / 12.0f)));
+    auto expanderArea = topControls.removeFromLeft(juce::roundToInt(row1Usable * (4.0f / 12.0f)));
     topControls.removeFromLeft(6);
-    auto autoGainArea = topControls;
+    auto compArea = topControls;
 
     int row2Usable = botControls.getWidth() - 12;
     auto levelerArea  = botControls.removeFromLeft(juce::roundToInt(row2Usable * (4.0f / 7.5f)));
@@ -470,7 +473,7 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     drawSectionBackground(g, grArea,       "", panelCol); // GR meter background
     drawSectionBackground(g, gateArea,     "",  panelCol);
     drawSectionBackground(g, expanderArea, "",  panelCol);
-    drawSectionBackground(g, autoGainArea, "",  panelCol);
+    drawSectionBackground(g, compArea,     "",  panelCol);
     drawSectionBackground(g, levelerArea,  "",  panelCol);
     drawSectionBackground(g, limiterArea,  "",  panelCol);
     drawSectionBackground(g, lookaheadArea,"",  panelCol);
@@ -534,7 +537,7 @@ void LufsNormalizerEditor::timerCallback()
 
     // Update GR meter
     grMeter.setExpanderGR (processor.getExpanderGrDb());
-    grMeter.setAutoGain   (processor.getAutoGainDb());
+    grMeter.setCompGR     (processor.getCompGrDb());
     grMeter.setLevelerGain(processor.getLevelerGainDb());
     grMeter.setLimiterGR  (processor.getLimiterGrDb());
     grMeter.repaint();

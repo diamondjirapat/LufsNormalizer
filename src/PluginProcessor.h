@@ -5,7 +5,7 @@
 
 #include "dsp/LufsMeter.h"
 #include "dsp/Expander.h"
-#include "dsp/AutoGain.h"
+#include "dsp/Compressor.h"
 #include "dsp/GainSmoother.h"
 #include "dsp/TruePeakLimiter.h"
 
@@ -25,13 +25,14 @@ namespace ParamID
     inline constexpr const char* GATE_ATTACK      = "gateAttack";
     inline constexpr const char* GATE_RELEASE     = "gateRelease";
 
-    // AutoGain
-    inline constexpr const char* AUTOGAIN_ENABLED = "autoGainEnabled";
-    inline constexpr const char* AUTOGAIN_TARGET  = "autoGainTarget";
-    inline constexpr const char* AUTOGAIN_ATTACK  = "autoGainAttack";
-    inline constexpr const char* AUTOGAIN_RELEASE = "autoGainRelease";
-    inline constexpr const char* AUTOGAIN_MAXGAIN = "autoGainMaxGain";
-    inline constexpr const char* AUTOGAIN_REDUCE  = "autoGainReduce";
+    // Compressor
+    inline constexpr const char* COMP_ENABLED   = "compEnabled";
+    inline constexpr const char* COMP_THRESHOLD = "compThreshold";
+    inline constexpr const char* COMP_RATIO     = "compRatio";
+    inline constexpr const char* COMP_ATTACK    = "compAttack";
+    inline constexpr const char* COMP_RELEASE   = "compRelease";
+    inline constexpr const char* COMP_MAKEUP    = "compMakeup";
+    inline constexpr const char* COMP_AUTO_MAKEUP= "compAutoMakeup";
 
     // Expander
     inline constexpr const char* EXP_ENABLED      = "expEnabled";
@@ -66,11 +67,13 @@ struct Preset
     float expThreshold;
     float expRatio;
     float expKnee;
-    // AutoGain
-    float autoGainTarget;
-    float autoGainAttack;
-    float autoGainRelease;
-    float autoGainMaxGain;
+    // Compressor
+    float compThreshold;
+    float compRatio;
+    float compAttack;
+    float compRelease;
+    float compMakeup;
+    float compAutoMakeup;
     // Gate
     float gateThreshold;
     // Limiter
@@ -78,12 +81,12 @@ struct Preset
 };
 
 inline constexpr Preset kPresets[] = {
-    //  name            tgt     atk     rel    max     eT     eR    eK     agT    agAtk    agRel   agMax    gT     lC
-    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -18.0f, 500.0f, 1000.0f, 12.0f, -60.0f, -1.0f },
-    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -18.0f, 400.0f,  800.0f, 12.0f, -55.0f, -1.0f },
-    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -20.0f, 300.0f,  600.0f, 12.0f, -50.0f, -2.0f },
-    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -24.0f, 800.0f, 2000.0f, 12.0f, -60.0f, -1.0f },
-    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -16.0f, 600.0f, 1500.0f, 12.0f, -70.0f, -1.0f },
+    //  name            tgt     atk     rel    max     eT     eR    eK     cT      cR    cAtk   cRel   cM   cAM   gT     lC
+    { "Streaming",    -14.0f, 300.0f, 600.0f, 24.0f, -45.0f, 2.0f, 6.0f, -20.0f, 2.0f, 10.0f, 100.0f, 0.0f, 1.0f, -60.0f, -1.0f },
+    { "Podcast",      -16.0f, 200.0f, 500.0f, 18.0f, -40.0f, 2.5f, 6.0f, -24.0f, 3.0f, 5.0f,  200.0f, 0.0f, 1.0f, -55.0f, -1.0f },
+    { "Broadcast",    -23.0f, 150.0f, 400.0f, 12.0f, -35.0f, 3.0f, 4.0f, -24.0f, 2.0f, 10.0f, 150.0f, 0.0f, 1.0f, -50.0f, -2.0f },
+    { "Film / TV",    -24.0f, 200.0f, 800.0f, 12.0f, -50.0f, 1.5f, 8.0f, -30.0f, 1.5f, 20.0f, 300.0f, 0.0f, 1.0f, -60.0f, -1.0f },
+    { "Music Master", -14.0f, 400.0f,1000.0f, 12.0f, -60.0f, 1.5f, 6.0f, -18.0f, 2.5f, 30.0f, 100.0f, 0.0f, 1.0f, -70.0f, -1.0f },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +137,7 @@ public:
     float getAnalysisMomentaryLUFS() const noexcept { return analysisMeter.getMomentaryLUFS(); }
 
     float getLevelerGainDb()  const noexcept { return gainSmoother.getCurrentGainDb(); }
-    float getAutoGainDb()     const noexcept { return autoGain.getCurrentGainDb(); }
+    float getCompGrDb()       const noexcept { return compressor.getGainReductionDb(); }
     float getExpanderGrDb()   const noexcept { return expander.getGainReductionDb();   }
     float getLimiterGrDb()    const noexcept { return limiter.getGainReductionDb();     }
 
@@ -163,7 +166,7 @@ private:
     // ── DSP chain ─────────────────────────────────────────────────────────────
     juce::dsp::NoiseGate<float> gate;
     Expander       expander;
-    AutoGain       autoGain;
+    Compressor     compressor;
     LufsMeter      inputMeter;
     LufsMeter      analysisMeter;
     LufsMeter      outputMeter;
@@ -186,12 +189,13 @@ private:
     std::atomic<float>* pExpAttack      = nullptr;
     std::atomic<float>* pExpRelease     = nullptr;
     std::atomic<float>* pExpKnee        = nullptr;
-    std::atomic<float>* pAutoGainEnabled = nullptr;
-    std::atomic<float>* pAutoGainTarget = nullptr;
-    std::atomic<float>* pAutoGainAttack = nullptr;
-    std::atomic<float>* pAutoGainRelease = nullptr;
-    std::atomic<float>* pAutoGainMaxGain = nullptr;
-    std::atomic<float>* pAutoGainReduce = nullptr;
+    std::atomic<float>* pCompEnabled    = nullptr;
+    std::atomic<float>* pCompThreshold  = nullptr;
+    std::atomic<float>* pCompRatio      = nullptr;
+    std::atomic<float>* pCompAttack     = nullptr;
+    std::atomic<float>* pCompRelease    = nullptr;
+    std::atomic<float>* pCompMakeup     = nullptr;
+    std::atomic<float>* pCompAutoMakeup = nullptr;
     std::atomic<float>* pAttackMs       = nullptr;
     std::atomic<float>* pReleaseMs      = nullptr;
     std::atomic<float>* pMaxGainDb      = nullptr;

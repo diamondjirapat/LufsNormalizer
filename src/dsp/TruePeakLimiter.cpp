@@ -80,8 +80,6 @@ void TruePeakLimiter::processBlock(juce::AudioBuffer<float>& buffer)
     juce::dsp::AudioBlock<float> activeBlock = fullBlock.getSubBlock(0, (size_t)numSamples);
     auto upBlock = oversampling->processSamplesUp(activeBlock);
 
-    const int upSamples = (int)upBlock.getNumSamples();
-
     // Build a per-original-sample peak table from the oversampled signal
     // Each original sample corresponds to kOversamplingFactor upsampled samples
     std::fill(perSamplePeak.begin(), perSamplePeak.begin() + numSamples, 0.0f);
