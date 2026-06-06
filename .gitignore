@@ -7,3 +7,7 @@ temp.txt
 /build-codex-ninja
 /build-codex
 TODO.txt
+.vscode/
+*.user
+*.suo
+LufsNormalizer_artefacts/
