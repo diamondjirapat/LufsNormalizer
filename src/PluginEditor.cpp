@@ -6,21 +6,21 @@
 // ═════════════════════════════════════════════════════════════════════════════
 DarkLookAndFeel::DarkLookAndFeel()
 {
-    setColour(juce::Slider::thumbColourId,           juce::Colour(0xff00d4ff));
-    setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff00d4ff));
-    setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff252936));
-    setColour(juce::Slider::textBoxTextColourId,     juce::Colours::white);
-    setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff161821));
-    setColour(juce::Slider::textBoxOutlineColourId,  juce::Colour(0xff3a3d4a));
-    setColour(juce::Label::textColourId,             juce::Colour(0xffa0a5b5));
-    setColour(juce::ToggleButton::textColourId,      juce::Colours::white);
-    setColour(juce::ComboBox::backgroundColourId,    juce::Colour(0xff161821));
-    setColour(juce::ComboBox::textColourId,          juce::Colours::white);
-    setColour(juce::ComboBox::outlineColourId,       juce::Colour(0xff3a3d4a));
-    setColour(juce::TextButton::buttonColourId,      juce::Colour(0xff2a2d3e));
-    setColour(juce::TextButton::textColourOffId,     juce::Colours::white);
-    setColour(juce::PopupMenu::backgroundColourId,   juce::Colour(0xff1a1c23));
-    setColour(juce::PopupMenu::textColourId,         juce::Colours::white);
+    setColour(juce::Slider::thumbColourId,              juce::Colour(0xff00d4ff));
+    setColour(juce::Slider::rotarySliderFillColourId,   juce::Colour(0xff00d4ff));
+    setColour(juce::Slider::rotarySliderOutlineColourId,juce::Colour(0xff1e2030));
+    setColour(juce::Slider::textBoxTextColourId,        juce::Colour(0xffe0e4f0));
+    setColour(juce::Slider::textBoxBackgroundColourId,  juce::Colour(0xff0c0d14));
+    setColour(juce::Slider::textBoxOutlineColourId,     juce::Colour(0xff2a2d3e));
+    setColour(juce::Label::textColourId,                juce::Colour(0xff8890a5));
+    setColour(juce::ToggleButton::textColourId,         juce::Colours::white);
+    setColour(juce::ComboBox::backgroundColourId,       juce::Colour(0xff0f1018));
+    setColour(juce::ComboBox::textColourId,             juce::Colour(0xffe0e4f0));
+    setColour(juce::ComboBox::outlineColourId,          juce::Colour(0xff2a2d3e));
+    setColour(juce::TextButton::buttonColourId,         juce::Colour(0xff1a1d2e));
+    setColour(juce::TextButton::textColourOffId,        juce::Colour(0xffe0e4f0));
+    setColour(juce::PopupMenu::backgroundColourId,      juce::Colour(0xff111320));
+    setColour(juce::PopupMenu::textColourId,            juce::Colour(0xffe0e4f0));
 }
 
 void DarkLookAndFeel::drawRotarySlider(juce::Graphics& g,
@@ -28,48 +28,85 @@ void DarkLookAndFeel::drawRotarySlider(juce::Graphics& g,
     float sliderPos, float startAngle, float endAngle,
     juce::Slider& /*slider*/)
 {
-    const float radius = (float)std::min(width, height) * 0.5f - 6.0f;
+    const float radius  = (float)std::min(width, height) * 0.5f - 6.0f;
     const float centreX = (float)x + (float)width  * 0.5f;
     const float centreY = (float)y + (float)height * 0.5f;
     const float angle   = startAngle + sliderPos * (endAngle - startAngle);
+    const auto  accentCol = findColour(juce::Slider::rotarySliderFillColourId);
 
-    // Inner dark circle (background)
-    g.setColour(juce::Colour(0xff161821));
-    g.fillEllipse(centreX - radius, centreY - radius, radius * 2.0f, radius * 2.0f);
-    
-    // Slight shadow or gradient inside
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2a2d3e), centreX, centreY - radius,
-                                           juce::Colour(0xff12131b), centreX, centreY + radius, false));
-    g.fillEllipse(centreX - radius + 2, centreY - radius + 2, (radius - 2) * 2.0f, (radius - 2) * 2.0f);
+    // ── Shadow ring (depth cue) ──────────────────────────────────────────────
+    g.setColour(juce::Colour(0x30000000));
+    g.fillEllipse(centreX - radius - 1, centreY - radius + 1,
+                  (radius + 1) * 2.0f, (radius + 1) * 2.0f);
 
-    // Outer track arc
+    // ── Outer ring background ────────────────────────────────────────────────
+    g.setColour(juce::Colour(0xff0a0b12));
+    g.fillEllipse(centreX - radius, centreY - radius,
+                  radius * 2.0f, radius * 2.0f);
+
+    // ── Concave knob surface (radial-like gradient) ──────────────────────────
+    const float inner = radius - 4.0f;
+    g.setGradientFill(juce::ColourGradient(
+        juce::Colour(0xff22253a), centreX, centreY - inner * 0.6f,
+        juce::Colour(0xff0c0d16), centreX, centreY + inner * 0.8f, false));
+    g.fillEllipse(centreX - inner, centreY - inner,
+                  inner * 2.0f, inner * 2.0f);
+
+    // ── Subtle rim highlight (top edge catch-light) ──────────────────────────
+    {
+        juce::Path rimArc;
+        rimArc.addCentredArc(centreX, centreY, radius - 0.5f, radius - 0.5f,
+                             0.0f, -2.4f, -0.7f, true);
+        g.setColour(juce::Colour(0x18ffffff));
+        g.strokePath(rimArc, juce::PathStrokeType(1.0f,
+            juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    // ── Track arc (inactive portion) ─────────────────────────────────────────
     juce::Path track;
     track.addCentredArc(centreX, centreY, radius, radius,
                         0.0f, startAngle, endAngle, true);
-    g.setColour(findColour(juce::Slider::rotarySliderOutlineColourId));
-    g.strokePath(track, juce::PathStrokeType(4.0f,
+    g.setColour(findColour(juce::Slider::rotarySliderOutlineColourId).withAlpha(0.5f));
+    g.strokePath(track, juce::PathStrokeType(3.0f,
         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    // Fill arc
-    juce::Path fill;
-    fill.addCentredArc(centreX, centreY, radius, radius,
-                       0.0f, startAngle, angle, true);
-    g.setColour(findColour(juce::Slider::rotarySliderFillColourId).withAlpha(0.2f));
-    g.strokePath(fill, juce::PathStrokeType(8.0f,
-        juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    g.setColour(findColour(juce::Slider::rotarySliderFillColourId));
-    g.strokePath(fill, juce::PathStrokeType(4.0f,
-        juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    // ── Value arc — triple-layer neon glow ───────────────────────────────────
+    if (sliderPos > 0.001f)
+    {
+        juce::Path fill;
+        fill.addCentredArc(centreX, centreY, radius, radius,
+                           0.0f, startAngle, angle, true);
 
-    // Pointer dot
-    const float dotR = 3.0f;
-    const float px = centreX + std::sin(angle) * (radius - 6.0f);
-    const float py = centreY - std::cos(angle) * (radius - 6.0f);
-    
-    g.setColour(juce::Colours::white);
-    g.fillEllipse(px - dotR, py - dotR, dotR * 2.0f, dotR * 2.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.4f));
-    g.fillEllipse(px - dotR - 2.0f, py - dotR - 2.0f, (dotR + 2.0f) * 2.0f, (dotR + 2.0f) * 2.0f);
+        // Layer 1: wide soft glow
+        g.setColour(accentCol.withAlpha(0.10f));
+        g.strokePath(fill, juce::PathStrokeType(10.0f,
+            juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        // Layer 2: medium glow
+        g.setColour(accentCol.withAlpha(0.25f));
+        g.strokePath(fill, juce::PathStrokeType(6.0f,
+            juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        // Layer 3: crisp core
+        g.setColour(accentCol);
+        g.strokePath(fill, juce::PathStrokeType(2.5f,
+            juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    // ── Pointer line (replaces dot) ──────────────────────────────────────────
+    {
+        const float pInner = radius * 0.38f;
+        const float pOuter = radius - 5.0f;
+        const float x1 = centreX + std::sin(angle) * pInner;
+        const float y1 = centreY - std::cos(angle) * pInner;
+        const float x2 = centreX + std::sin(angle) * pOuter;
+        const float y2 = centreY - std::cos(angle) * pOuter;
+
+        // Glow behind the line
+        g.setColour(juce::Colours::white.withAlpha(0.15f));
+        g.drawLine(x1, y1, x2, y2, 5.0f);
+        // Crisp pointer
+        g.setColour(juce::Colours::white.withAlpha(0.95f));
+        g.drawLine(x1, y1, x2, y2, 1.8f);
+    }
 }
 
 void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
@@ -79,30 +116,53 @@ void DarkLookAndFeel::drawToggleButton(juce::Graphics& g,
     const bool on = button.getToggleState();
     const auto bounds = button.getLocalBounds().toFloat();
 
-    const float h = 16.0f;
-    const float w = 28.0f;
+    const float h  = 16.0f;
+    const float w  = 30.0f;
     const float bx = bounds.getX() + 4.0f;
     const float by = bounds.getCentreY() - h * 0.5f;
 
-    g.setColour(on ? juce::Colour(0xff2ecc71) : juce::Colour(0xff3a3d4a));
+    const auto onColour = juce::Colour(0xff00e676);
+
+    // ── Glow halo behind pill when ON ────────────────────────────────────────
+    if (on)
+    {
+        g.setColour(onColour.withAlpha(0.12f));
+        g.fillRoundedRectangle(bx - 3.0f, by - 3.0f, w + 6.0f, h + 6.0f, (h + 6.0f) * 0.5f);
+    }
+
+    // ── Pill track ────────────────────────────────────────────────────────────
+    g.setColour(on ? onColour : juce::Colour(0xff282c3a));
     g.fillRoundedRectangle(bx, by, w, h, h * 0.5f);
 
-    const float thumbR = h * 0.5f - 2.0f;
-    const float thumbX = on ? bx + w - thumbR * 2.0f - 2.0f : bx + 2.0f;
-    g.setColour(juce::Colours::white);
-    g.fillEllipse(thumbX, bounds.getCentreY() - thumbR, thumbR * 2.0f, thumbR * 2.0f);
+    // Subtle inner border
+    g.setColour(on ? onColour.brighter(0.2f).withAlpha(0.3f)
+                   : juce::Colour(0xff3a3f50));
+    g.drawRoundedRectangle(bx, by, w, h, h * 0.5f, 0.8f);
 
-    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
-    g.setColour(on ? juce::Colours::white : juce::Colour(0xffa0a5b5));
+    // ── Thumb ────────────────────────────────────────────────────────────────
+    const float thumbR = h * 0.5f - 2.5f;
+    const float thumbX = on ? bx + w - thumbR * 2.0f - 2.5f : bx + 2.5f;
+    const float thumbY = bounds.getCentreY() - thumbR;
+
+    // Shadow under thumb
+    g.setColour(juce::Colour(0x30000000));
+    g.fillEllipse(thumbX + 0.5f, thumbY + 0.5f, thumbR * 2.0f, thumbR * 2.0f);
+    // Thumb
+    g.setColour(juce::Colours::white);
+    g.fillEllipse(thumbX, thumbY, thumbR * 2.0f, thumbR * 2.0f);
+
+    // ── Label text ───────────────────────────────────────────────────────────
+    g.setFont(juce::Font(juce::FontOptions(12.5f, juce::Font::bold)));
+    g.setColour(on ? juce::Colour(0xfff0f2f8) : juce::Colour(0xff6b7080));
     g.drawText(button.getButtonText(),
-               (int)(bx + w + 6.0f), 0,
-               button.getWidth() - (int)(w + 10.0f), (int)bounds.getHeight(),
+               (int)(bx + w + 7.0f), 0,
+               button.getWidth() - (int)(w + 12.0f), (int)bounds.getHeight(),
                juce::Justification::centredLeft, true);
 }
 
 juce::Font DarkLookAndFeel::getLabelFont(juce::Label&)
 {
-    return juce::Font(juce::FontOptions(11.0f));
+    return juce::Font(juce::FontOptions(10.5f));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -133,9 +193,9 @@ LufsNormalizerEditor::LufsNormalizerEditor(LufsNormalizerProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
     setLookAndFeel(&laf);
-    setSize(960, 560);
+    setSize(1020, 600);
     setResizable(true, true);
-    setResizeLimits(720, 420, 1600, 900);
+    setResizeLimits(780, 460, 1600, 960);
 
     // ── Meters ────────────────────────────────────────────────────────────────
     inputMeter.setMode(LufsDisplay::Input);
@@ -272,7 +332,7 @@ void LufsNormalizerEditor::resized()
 
 void LufsNormalizerEditor::layoutComponents()
 {
-    auto area = getLocalBounds().reduced(8);
+    auto area = getLocalBounds().reduced(12);
 
 
     // ── Top bar: preset + reset ───────────────────────────────────────────────
@@ -442,11 +502,20 @@ void LufsNormalizerEditor::layoutComponents()
 // ── paint ─────────────────────────────────────────────────────────────────────
 void LufsNormalizerEditor::paint(juce::Graphics& g)
 {
-    // Background flat dark grey
-    g.fillAll(juce::Colour(0xff161618));
+    // ── Deep background ────────────────────────────────────────────────────────
+    g.fillAll(juce::Colour(0xff0d0e12));
 
-    // Use lighter grey for panels
-    const juce::Colour panelCol(0xff1c1d24);
+    // Subtle top-to-bottom gradient overlay for depth
+    {
+        juce::ColourGradient bg(
+            juce::Colour(0xff141620), 0.0f, 0.0f,
+            juce::Colour(0xff0a0b0e), 0.0f, (float)getHeight(), false);
+        g.setGradientFill(bg);
+        g.fillRect(getLocalBounds());
+    }
+
+    // ── Glassmorphic section panels ───────────────────────────────────────────
+    const juce::Colour panelCol(0xff14151c);
 
     drawSectionBackground(g, historyArea,  panelCol);
     drawSectionBackground(g, grArea,       panelCol);
@@ -457,29 +526,71 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
     drawSectionBackground(g, limiterArea,  panelCol);
     drawSectionBackground(g, lookaheadArea,panelCol);
 
-    // Plugin title (Centered in top bar, or right-aligned)
-    g.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
-    g.setColour(juce::Colour(0xff00d4ff));
-    g.drawText("LUFS MASTER",
-               topBarArea.withTrimmedLeft(380),
-               juce::Justification::centredLeft, false);
+    // ── Header: Plugin title & Version pill badge (Dynamic Scaling) ───────────
+    {
+        // remainingArea starts after the reset button (x = 482)
+        auto remainingArea = topBarArea.withTrimmedLeft(470);
+        
+        // Version pill badge on the far right
+        auto pillArea = remainingArea.removeFromRight(120).reduced(0, 4);
+        
+        // Title area is the remaining space between the reset button and the pill
+        auto titleArea = remainingArea;
+        
+        // Scale font size dynamically with width
+        float fontHeight = 17.0f;
+        if (remainingArea.getWidth() < 250)
+            fontHeight = 13.0f;
+        else if (remainingArea.getWidth() < 350)
+            fontHeight = 15.0f;
 
-    g.setFont(juce::Font(juce::FontOptions(11.0f)));
-    g.setColour(juce::Colour(0xff606575));
-    g.drawText("v1.2  |  BS.1770-4",
-               topBarArea.withTrimmedLeft(510),
-               juce::Justification::centredLeft, false);
+        g.setFont(juce::Font(juce::FontOptions(fontHeight, juce::Font::bold)));
+        g.setColour(juce::Colour(0xff00d4ff));
+        g.drawText("L U F S   M A S T E R", titleArea,
+                   juce::Justification::centred, false);
+
+        // Draw pill
+        const juce::String ver = "v1.3 | BS.1770-4";
+        g.setColour(juce::Colour(0xff1a1d2a));
+        g.fillRoundedRectangle(pillArea.toFloat(), 8.0f);
+        g.setColour(juce::Colour(0xff2a2e3e));
+        g.drawRoundedRectangle(pillArea.toFloat(), 8.0f, 0.8f);
+        g.setFont(juce::Font(juce::FontOptions(10.0f)));
+        g.setColour(juce::Colour(0xff606575));
+        g.drawText(ver, pillArea, juce::Justification::centred, false);
+    }
 }
 
 void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
     juce::Rectangle<int> area, juce::Colour colour) const
 {
-    g.setColour(colour);
-    g.fillRoundedRectangle(area.toFloat(), 6.0f);
-    
-    // Very subtle border for modern flat aesthetic
-    g.setColour(juce::Colour(0xff2d2e38));
-    g.drawRoundedRectangle(area.toFloat(), 6.0f, 1.0f);
+    auto r = area.toFloat();
+
+    // ── Inner fill: subtle vertical gradient (lighter top, darker bottom) ────
+    {
+        juce::ColourGradient fill(colour.brighter(0.08f), r.getX(), r.getY(),
+                                  colour.darker(0.05f),   r.getX(), r.getBottom(), false);
+        g.setGradientFill(fill);
+        g.fillRoundedRectangle(r, 6.0f);
+    }
+
+    // ── Gradient border: top-left lighter, bottom-right darker ────────────────
+    {
+        juce::ColourGradient border(
+            juce::Colour(0xff2e3248), r.getX(), r.getY(),
+            juce::Colour(0xff181a24), r.getRight(), r.getBottom(), false);
+        g.setGradientFill(border);
+        g.drawRoundedRectangle(r, 6.0f, 1.0f);
+    }
+
+    // ── Inner shadow at top edge ─────────────────────────────────────────────
+    {
+        juce::ColourGradient shadow(
+            juce::Colour(0x0cffffff), r.getX() + r.getWidth() * 0.5f, r.getY(),
+            juce::Colours::transparentBlack, r.getX() + r.getWidth() * 0.5f, r.getY() + 12.0f, false);
+        g.setGradientFill(shadow);
+        g.fillRoundedRectangle(r.withHeight(12.0f), 6.0f);
+    }
 }
 
 // ── timerCallback ─────────────────────────────────────────────────────────────

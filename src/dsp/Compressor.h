@@ -79,10 +79,12 @@ public:
             if (currentGrDb > 0.0f) currentGrDb = 0.0f;
         }
 
-        // Smooth GR for display (time constant roughly 50ms)
+        // Smooth GR for display (attack 10ms, release 50ms)
+        // Use block rate since this runs once per block, not per sample.
+        const double blockRate = sampleRate_ / (double)buffer.getNumSamples();
         const float coeff = (currentGrDb < gainReductionDb.load()) 
-            ? std::exp(-1.0f / (float)(0.010 * sampleRate_)) 
-            : std::exp(-1.0f / (float)(0.050 * sampleRate_));
+            ? std::exp(-1.0f / (float)(0.010 * blockRate)) 
+            : std::exp(-1.0f / (float)(0.050 * blockRate));
             
         float smoothedGr = gainReductionDb.load();
         smoothedGr = coeff * smoothedGr + (1.0f - coeff) * currentGrDb;

@@ -48,18 +48,34 @@ void LevelHistory::paint(juce::Graphics& g)
 
     if (!hasInput && !hasOutput)
     {
-        g.setColour(juce::Colours::grey.withAlpha(0.4f));
+        g.setColour(juce::Colour(0xff404560).withAlpha(0.5f));
         g.setFont(juce::Font(juce::FontOptions(11.0f)));
         g.drawText("No signal", bounds.toNearestInt(), juce::Justification::centred);
         return;
     }
 
-    // ── Target line ───────────────────────────────────────────────────────────
-    const float targetY = y + dbToY(targetLUFS.load(), h);
-    g.setColour(juce::Colour(0xffff9900).withAlpha(0.5f));
-    g.drawLine(x, targetY, x + w, targetY, 1.5f);
+    // ── Target line — dashed with glow ───────────────────────────────────────
+    {
+        const float targetY = y + dbToY(targetLUFS.load(), h);
 
-    // ── Helper lambda to draw a history trace ─────────────────────────────────
+        // Glow behind the line
+        g.setColour(juce::Colour(0xffffab00).withAlpha(0.10f));
+        g.fillRect(x, targetY - 2.0f, w, 4.0f);
+
+        // Dashed line
+        g.setColour(juce::Colour(0xffffab00).withAlpha(0.55f));
+        const float dashLen = 5.0f;
+        const float gapLen  = 3.0f;
+        float cx = x;
+        while (cx < x + w)
+        {
+            float endX = std::min(cx + dashLen, x + w);
+            g.drawLine(cx, targetY, endX, targetY, 1.2f);
+            cx += dashLen + gapLen;
+        }
+    }
+
+    // ── Helper lambda to draw a history trace with glow ──────────────────────
     auto drawTrace = [&](const std::deque<float>& history, juce::Colour strokeCol,
                          juce::Colour fillCol, float strokeWidth)
     {
@@ -79,61 +95,80 @@ void LevelHistory::paint(juce::Graphics& g)
             else          { path.lineTo(px, py); }
         }
 
-        // Fill under the curve
+        // Fill under the curve — pronounced gradient
         juce::Path filled = path;
         filled.lineTo(x + (float)(maxPoints - 1) * step, y + h);
         filled.lineTo(x + (float)(maxPoints - n) * step, y + h);
         filled.closeSubPath();
 
-        g.setColour(fillCol);
-        g.fillPath(filled);
+        // Multi-stop fill gradient (more opaque near the line, fading out)
+        {
+            juce::ColourGradient grad(fillCol.withAlpha(0.25f), x, y,
+                                      fillCol.withAlpha(0.02f), x, y + h, false);
+            grad.addColour(0.4, fillCol.withAlpha(0.12f));
+            g.setGradientFill(grad);
+            g.fillPath(filled);
+        }
 
-        // Stroke
-        g.setColour(strokeCol);
+        // Glow stroke (wide, soft)
+        g.setColour(strokeCol.withAlpha(0.12f));
+        g.strokePath(path, juce::PathStrokeType(strokeWidth * 3.0f, juce::PathStrokeType::curved));
+
+        // Crisp stroke
+        g.setColour(strokeCol.withAlpha(0.85f));
         g.strokePath(path, juce::PathStrokeType(strokeWidth, juce::PathStrokeType::curved));
     };
 
-    // ── Draw input trace (blue, behind) ───────────────────────────────────────
+    // ── Draw input trace (blue, behind) ──────────────────────────────────────
     drawTrace(inputHistory,
-              juce::Colour(0xff3a8fd4),            // blue stroke
-              juce::Colour(0xff3a8fd4).withAlpha(0.12f), // blue fill
+              juce::Colour(0xff3a8fd4),
+              juce::Colour(0xff3a8fd4),
               1.5f);
 
-    // ── Draw output trace (green, in front) ───────────────────────────────────
+    // ── Draw output trace (green, in front) ──────────────────────────────────
     drawTrace(outputHistory,
-              juce::Colour(0xff2ecc71),            // green stroke
-              juce::Colour(0xff2ecc71).withAlpha(0.12f), // green fill
+              juce::Colour(0xff00e676),
+              juce::Colour(0xff00e676),
               2.0f);
 
-    // ── Scale labels ─────────────────────────────────────────────────────────
-    g.setFont(juce::Font(juce::FontOptions(8.0f)));
-    g.setColour(juce::Colours::grey);
+    // ── Scale labels (dotted grid) ───────────────────────────────────────────
+    g.setFont(juce::Font(juce::FontOptions(7.5f)));
     for (float db = kMaxDb; db >= kMinDb; db -= 12.0f)
     {
         const float labelY = y + dbToY(db, h);
+
+        g.setColour(juce::Colour(0xff505568));
         g.drawText(juce::String((int)db),
                    (int)x, (int)(labelY - 5.0f), 20, 10,
                    juce::Justification::left, false);
-        g.setColour(juce::Colours::grey.withAlpha(0.2f));
-        g.drawLine(x + 20.0f, labelY, x + w, labelY, 0.5f);
-        g.setColour(juce::Colours::grey);
+
+        // Dotted grid line
+        g.setColour(juce::Colour(0xff252830));
+        float gx = x + 22.0f;
+        while (gx < x + w)
+        {
+            g.fillRect(gx, labelY, 2.0f, 0.5f);
+            gx += 5.0f;
+        }
     }
 
-    // ── Legend in top-right corner ────────────────────────────────────────────
-    const float legendX = x + w - 90.0f;
-    const float legendY = y + 4.0f;
+    // ── Legend in top-right corner (circles instead of rectangles) ────────────
+    {
+        const float legendX = x + w - 95.0f;
+        const float legendY = y + 5.0f;
 
-    g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+        g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
 
-    // Input (blue) legend
-    g.setColour(juce::Colour(0xff3a8fd4));
-    g.fillRect(legendX, legendY + 2.0f, 10.0f, 3.0f);
-    g.drawText("Input", (int)(legendX + 14.0f), (int)legendY, 30, 10,
-               juce::Justification::left, false);
+        // Input (blue) legend
+        g.setColour(juce::Colour(0xff3a8fd4));
+        g.fillEllipse(legendX, legendY + 1.5f, 6.0f, 6.0f);
+        g.drawText("Input", (int)(legendX + 10.0f), (int)legendY, 30, 10,
+                   juce::Justification::left, false);
 
-    // Output (green) legend
-    g.setColour(juce::Colour(0xff2ecc71));
-    g.fillRect(legendX + 48.0f, legendY + 2.0f, 10.0f, 3.0f);
-    g.drawText("Output", (int)(legendX + 62.0f), (int)legendY, 36, 10,
-               juce::Justification::left, false);
+        // Output (green) legend
+        g.setColour(juce::Colour(0xff00e676));
+        g.fillEllipse(legendX + 44.0f, legendY + 1.5f, 6.0f, 6.0f);
+        g.drawText("Output", (int)(legendX + 54.0f), (int)legendY, 36, 10,
+                   juce::Justification::left, false);
+    }
 }
