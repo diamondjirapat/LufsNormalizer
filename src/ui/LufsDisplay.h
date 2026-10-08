@@ -18,9 +18,6 @@ public:
     void setPeakDb (float db) noexcept { peakDb .store(db); }
     void setRmsDb  (float db) noexcept { rmsDb  .store(db); }
 
-    /** Still accepts LUFS values for the integrated/target overlay. */
-    void setTargetLUFS    (float lufs) noexcept { targetLUFS    .store(lufs); }
-
     void updatePeakHold();
 
     void paint(juce::Graphics& g) override;
@@ -35,9 +32,6 @@ private:
 
     std::atomic<float> peakDb  { kMinDb };
     std::atomic<float> rmsDb   { kMinDb };
-
-    // Legacy LUFS fields (for target line / integrated tick on the meter)
-    std::atomic<float> targetLUFS     { -16.0f  };
 
     // Peak-hold state
     float peakHoldDb   = kMinDb;

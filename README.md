@@ -9,15 +9,23 @@ smoothed gain compensation, true-peak limiting, and lookahead.
 ## Signal Chain
 
 ```
-Input → Expander → LUFS Meter → Gain Smoother → True-Peak Limiter → Output
+Input → Gate → Expander → Compressor → LUFS Meter → Gain Smoother → True-Peak Limiter → Dry/Wet Mix → Output
 ```
 
 | Stage | Purpose |
 |---|---|
+| **Gate** | Attenuates audio below a configurable threshold |
 | **Expander** | Downward expansion with soft knee — attenuates noise floor during quiet sections |
+| **Compressor** | Controls dynamic range with manual or automatic makeup gain |
 | **LUFS Meter** | EBU R128 K-weighted measurement: momentary (400 ms), short-term (3 s), integrated (gated) |
 | **Gain Smoother** | Converts LUFS error to a smoothed gain correction with configurable attack/release |
-| **True-Peak Limiter** | 4× oversampled brickwall limiter with 1 ms lookahead to prevent inter-sample clipping |
+| **True-Peak Limiter** | 4× FIR peak detection, stereo linked gain, and at least 1 ms lookahead; reserves 0.5 dB for output reconstruction |
+
+The dry path uses the same delay as the processed path. Host bypass also preserves
+the reported latency. Disabling the limiter bypasses gain reduction while retaining
+its delay. At sample rates where the FIR detector requires more than 1 ms, its
+lookahead extends to cover the detector latency. The ceiling applies to the wet
+limiter output; mixing in an over-ceiling dry signal can exceed it.
 
 ---
 
@@ -75,6 +83,21 @@ cmake --build build
 cmake -B build -S . -DJUCE_PATH=/path/to/JUCE -DCMAKE_BUILD_TYPE=Release
 ```
 
+### Running tests
+
+Tests are enabled by default. After building, run:
+
+```bash
+ctest --test-dir build -C Release --output-on-failure
+```
+
+The regression suite uses real JUCE DSP and covers calibrated loudness, varying
+block sizes, gated integration, expansion ratios, lookahead, dry/wet and host
+bypass latency, state restoration, mono presets, and independent 8× FIR checks
+of limiter output peaks at 8, 44.1, 48, 96, and 192 kHz. It also saves editor
+snapshots at the minimum, default, and maximum window sizes in the build folder.
+The existing assertion-based tests remain active in Release builds.
+
 ---
 
 ## Parameters
@@ -82,7 +105,7 @@ cmake -B build -S . -DJUCE_PATH=/path/to/JUCE -DCMAKE_BUILD_TYPE=Release
 ### LUFS Leveler
 | Parameter | Range | Default | Description |
 |---|---|---|---|
-| Target LUFS | -36 … -6 LUFS | -16 | Target integrated loudness |
+| Target LUFS | -36 … -6 LUFS | -16 | Target short-term loudness for gain correction |
 | Attack | 10 … 2000 ms | 200 | How fast gain increases |
 | Release | 50 … 5000 ms | 500 | How fast gain decreases |
 | Max Gain | 0 … 36 dB | 24 | Maximum gain boost/cut |
@@ -120,10 +143,12 @@ cmake -B build -S . -DJUCE_PATH=/path/to/JUCE -DCMAKE_BUILD_TYPE=Release
 
 ## Architecture Notes
 
-- **Thread safety**: All DSP parameters use `std::atomic`. No locks in the audio thread.
+- **Thread safety**: DSP parameters and published meter values use `std::atomic`. Meter reset requests are consumed on the audio thread; preset selection changes parameters without touching live DSP state.
 - **Denormal protection**: `juce::ScopedNoDenormals` in `processBlock`.
 - **Latency reporting**: Plugin reports lookahead + limiter latency to the host for PDC.
 - **State persistence**: Full parameter state saved/loaded via APVTS XML serialization.
+- **Loudness measurement**: Sample-based 400 ms and 3 s windows, with full 400 ms integration blocks advanced every 100 ms. Integrated gating uses a bounded 0.1 LU histogram with exact energy sums; relative-gate decisions are quantized to the histogram boundaries. Reset Integrated starts a fresh programme measurement and preserves the live filters and sliding windows.
+- **Block sizes**: Blocks larger than the prepared maximum are processed in preallocated chunks.
 
 ---
 

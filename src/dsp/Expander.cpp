@@ -113,7 +113,7 @@ float Expander::computeGainDb(float inputDb, float thresh,
         if (inputDb >= thresh)
             return 0.0f;
 
-        return (1.0f / rat - 1.0f) * (thresh - inputDb);
+        return (rat - 1.0f) * (inputDb - thresh);
     }
 
     const float halfKnee = knee * 0.5f;
@@ -128,18 +128,12 @@ float Expander::computeGainDb(float inputDb, float thresh,
     else if (inputDb <= lower)
     {
         // Below knee – full expansion
-        // Expander gain = (1/ratio - 1) * (threshold - inputDb)
-        // For ratio > 1 this is negative (gain reduction).
-        return (1.0f / rat - 1.0f) * (thresh - inputDb);
+        return (rat - 1.0f) * (inputDb - thresh);
     }
     else
     {
-        // Soft knee region – interpolate
-        const float x = (inputDb - lower) / knee; // 0..1
-        // Smooth step: 3x^2 - 2x^3
-        const float t = x * x * (3.0f - 2.0f * x);
-        // Blend between full expansion and unity
-        const float fullExpansion = (1.0f / rat - 1.0f) * halfKnee;
-        return fullExpansion * (1.0f - t);
+        // Quadratic knee matches both value and slope at each boundary.
+        const float distance = inputDb - upper;
+        return -(rat - 1.0f) * distance * distance / (2.0f * knee);
     }
 }

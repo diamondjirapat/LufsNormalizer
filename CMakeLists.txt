@@ -159,4 +159,23 @@ if(BUILD_TESTING)
 
     add_test(NAME ExpanderTests COMMAND test_expander)
 
+    juce_add_console_app(RegressionTests PRODUCT_NAME "LUFS Regression Tests")
+    target_sources(RegressionTests PRIVATE tests/test_regressions.cpp)
+    target_include_directories(RegressionTests PRIVATE src)
+    target_compile_definitions(RegressionTests PRIVATE
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(RegressionTests PRIVATE LufsNormalizer
+        juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    add_test(NAME RegressionTests COMMAND RegressionTests)
+
+    # Existing tests use assert; keep their checks active in Release builds too.
+    foreach(test_target DspUtilsTests test_expander)
+        if(MSVC)
+            target_compile_options(${test_target} PRIVATE /UNDEBUG)
+        else()
+            target_compile_options(${test_target} PRIVATE -UNDEBUG)
+        endif()
+    endforeach()
+
 endif()

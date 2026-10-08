@@ -3,7 +3,7 @@
 #include <cmath>
 
 LevelHistory::LevelHistory(int historySeconds)
-    : maxPoints(historySeconds * 10) // 10 updates/sec
+    : maxPoints(std::max(2, historySeconds * 10)) // 10 updates/sec
 {
 }
 

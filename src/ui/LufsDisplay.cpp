@@ -144,31 +144,6 @@ void LufsDisplay::paint(juce::Graphics& g)
         g.fillRect(x + 2.0f, tickY - 0.5f, w - 4.0f, 1.0f);
     }
 
-    // ── Target line (only for output meter) — dashed with glow ────────────────
-    if (!isInput)
-    {
-        const float tgtLufs = targetLUFS.load();
-        const float tgtY = y + dbToY(tgtLufs, h);
-        if (tgtY > y && tgtY < y + h)
-        {
-            // Glow behind the line
-            g.setColour(juce::Colour(0xffffab00).withAlpha(0.15f));
-            g.fillRect(x, tgtY - 2.0f, w, 4.0f);
-
-            // Dashed line
-            g.setColour(juce::Colour(0xffffab00).withAlpha(0.75f));
-            const float dashLen = 4.0f;
-            const float gapLen  = 3.0f;
-            float cx = x;
-            while (cx < x + w)
-            {
-                float endX = std::min(cx + dashLen, x + w);
-                g.drawLine(cx, tgtY, endX, tgtY, 1.2f);
-                cx += dashLen + gapLen;
-            }
-        }
-    }
-
     // ── Scale labels ─────────────────────────────────────────────────────────
     g.setFont(juce::Font(juce::FontOptions(7.5f)));
     g.setColour(juce::Colour(0xff5a5e70));

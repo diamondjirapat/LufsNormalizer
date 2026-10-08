@@ -10,10 +10,10 @@ LufsMeter::makePreFilterCoeffs(double fs)
 {
     // High-shelf pre-filter
     // Derived from the analogue prototype in BS.1770-4
-    const double Vh = 1.58486;
-    const double Vb = 1.52433;
+    const double Vh = std::pow(10.0, 3.999843853973347 / 20.0);
+    const double Vb = std::pow(Vh, 0.4996667741545416);
     const double Vl = 1.0;
-    const double Q  = 0.7071;
+    const double Q  = 0.7071752369554196;
     const double fc = 1681.974450955533;
     const double K  = std::tan(juce::MathConstants<double>::pi * fc / fs);
 
@@ -39,9 +39,9 @@ LufsMeter::makeRLBFilterCoeffs(double fs)
     const double Q  = 0.5003270373238773;
 
     const double a0 =  1.0 + K / Q + K * K;
-    const double b0 =  1.0 / a0;
-    const double b1 = -2.0 / a0;
-    const double b2 =  1.0 / a0;
+    const double b0 =  1.0;
+    const double b1 = -2.0;
+    const double b2 =  1.0;
     const double a1 =  2.0 * (K * K - 1.0) / a0;
     const double a2 = (1.0 - K / Q + K * K) / a0;
 
@@ -54,7 +54,6 @@ LufsMeter::makeRLBFilterCoeffs(double fs)
 // ── prepare ──────────────────────────────────────────────────────────────────
 void LufsMeter::prepare(double sampleRate, int maxBlockSize, int numChannels)
 {
-    sampleRate_  = sampleRate;
     numChannels_ = numChannels;
 
     // Build per-channel K-weighting filters
@@ -64,7 +63,7 @@ void LufsMeter::prepare(double sampleRate, int maxBlockSize, int numChannels)
 
     juce::dsp::ProcessSpec spec;
     spec.sampleRate       = sampleRate;
-    spec.maximumBlockSize = 4096;
+    spec.maximumBlockSize = (juce::uint32)std::max(1, maxBlockSize);
     spec.numChannels      = 1;
 
     for (auto& ch : filters)
@@ -77,29 +76,19 @@ void LufsMeter::prepare(double sampleRate, int maxBlockSize, int numChannels)
         ch.rlbFilter.reset();
     }
 
-    // Window sizes in blocks (one block = processBlock call)
-    // Momentary = 400 ms, Short-term = 3000 ms
-    // Allocate based on block size to avoid massive over-allocation.
-    const int minBlock = std::max(1, maxBlockSize);
-    momentaryWindow.allocate((int)std::ceil(sampleRate * 0.400 / minBlock) + 1);
-    shortTermWindow.allocate((int)std::ceil(sampleRate * 3.000 / minBlock) + 1);
-
-    // Gated integration: 100 ms blocks
-    gatedBlockSize    = (int)std::round(sampleRate * 0.1);
-    gatedBlockAccum   = 0.0;
-    gatedBlockSamples = 0;
-    histogram.fill(0);
-
+    momentaryWindow.allocate(std::max(1, (int)std::round(sampleRate * 0.400)));
+    shortTermWindow.allocate(std::max(1, (int)std::round(sampleRate * 3.000)));
+    gatedBlockSize = std::max(1, (int)std::round(sampleRate * 0.1));
     reset();
 }
 
 void LufsMeter::reset()
 {
-    momentaryWindow.allocate(momentaryWindow.maxBlocks);
-    shortTermWindow.allocate(shortTermWindow.maxBlocks);
+    momentaryWindow.clear();
+    shortTermWindow.clear();
     histogram.fill(0);
-    gatedBlockAccum   = 0.0;
-    gatedBlockSamples = 0;
+    histogramEnergy.fill(0.0);
+    gatedBlockSamples = (int)momentaryWindow.energies.size();
 
     for (auto& ch : filters)
     {
@@ -120,85 +109,60 @@ void LufsMeter::processBlock(const juce::AudioBuffer<float>& buffer)
 
     if (numSamples == 0 || numCh == 0) return;
 
-    // ── Apply K-weighting and accumulate mean-square ─────────────────────────
-    // Channel weights per BS.1770-4: L/R/C = 1.0, LFE = 0, Ls/Rs = 1.41
-    double blockMeanSquare = 0.0;
-
-    for (int ch = 0; ch < numCh; ++ch)
+    for (int i = 0; i < numSamples; ++i)
     {
-        // Per-channel weight (BS.1770-4)
-        double weight = 1.0;
-        if (numCh > 4 && ch == 3)       weight = 0.0;   // LFE (5.1 layout: L R C LFE Ls Rs)
-        else if (numCh > 4 && ch >= 4)  weight = 1.41;  // Ls, Rs surround channels
-
-        if (weight < 0.001) continue;
-
-        const float* src = buffer.getReadPointer(ch);
-
-        double chSum = 0.0;
-        for (int i = 0; i < numSamples; ++i)
+        double energy = 0.0;
+        for (int ch = 0; ch < numCh; ++ch)
         {
-            float s = filters[(size_t)ch].preFilter.processSample(src[i]);
-            s       = filters[(size_t)ch].rlbFilter.processSample(s);
-            chSum += (double)s * (double)s;
+            const double weight = numCh > 4 && ch == 3 ? 0.0
+                                : numCh > 4 && ch >= 4 ? 1.41 : 1.0;
+            if (weight == 0.0) continue;
+            float s = filters[(size_t)ch].preFilter.processSample(buffer.getReadPointer(ch)[i]);
+            s = filters[(size_t)ch].rlbFilter.processSample(s);
+            energy += weight * (double)s * (double)s;
         }
-        blockMeanSquare += weight * chSum / (double)numSamples;
-    }
+        momentaryWindow.push(energy);
+        shortTermWindow.push(energy);
 
-    // ── Update sliding windows ────────────────────────────────────────────────
-    // We store the mean-square for this block and track how many samples
-    // each window should span.
-    const double blockDuration = (double)numSamples / sampleRate_;
-
-    // Recalculate max blocks for each window based on current block size
-    // Prevent exceeding the maximum allocation if the block size gets exceptionally small.
-    int momentaryMaxBlocks  = std::max(1, (int)std::ceil(0.400 / blockDuration));
-    int shortTermMaxBlocks  = std::max(1, (int)std::ceil(3.000 / blockDuration));
-
-    momentaryWindow.setMaxBlocks(std::min(momentaryMaxBlocks, (int)momentaryWindow.energies.size()));
-    shortTermWindow.setMaxBlocks(std::min(shortTermMaxBlocks, (int)shortTermWindow.energies.size()));
-
-    momentaryWindow.push(blockMeanSquare, numSamples);
-    shortTermWindow.push(blockMeanSquare, numSamples);
-
-    // ── Publish momentary / short-term ───────────────────────────────────────
-    momentaryLUFS .store(msToLUFS(momentaryWindow.meanSquare()));
-    shortTermLUFS .store(msToLUFS(shortTermWindow.meanSquare()));
-
-    // ── Gated integration (100 ms blocks) ────────────────────────────────────
-    gatedBlockAccum   += blockMeanSquare * (double)numSamples;
-    gatedBlockSamples += numSamples;
-
-    if (gatedBlockSamples >= gatedBlockSize)
-    {
-        const double ms = gatedBlockAccum / (double)gatedBlockSamples;
-        const float lufs = msToLUFS(ms);
-        if (lufs >= HISTOGRAM_MIN_LUFS)
+        // Full 400 ms gating blocks, advanced every 100 ms (75% overlap).
+        if (--gatedBlockSamples <= 0)
         {
-            int binIndex = (int)std::round((lufs - HISTOGRAM_MIN_LUFS) / 0.1f);
-            binIndex = std::max(0, std::min(binIndex, (int)HISTOGRAM_BINS - 1));
-            histogram[(size_t)binIndex]++;
+            const double mean = momentaryWindow.meanSquare();
+            const float lufs = msToLUFS(mean);
+            if (lufs > HISTOGRAM_MIN_LUFS)
+            {
+                const int bin = std::clamp((int)std::floor((lufs - HISTOGRAM_MIN_LUFS) / 0.1f),
+                                           0, (int)HISTOGRAM_BINS - 1);
+                ++histogram[(size_t)bin];
+                histogramEnergy[(size_t)bin] += mean;
+            }
+            updateIntegrated();
+            gatedBlockSamples = gatedBlockSize;
         }
-
-        gatedBlockAccum   = 0.0;
-        gatedBlockSamples = 0;
-        updateIntegrated();
     }
+    momentaryLUFS.store(msToLUFS(momentaryWindow.meanSquare()));
+    shortTermLUFS.store(msToLUFS(shortTermWindow.meanSquare()));
+}
+
+void LufsMeter::resetIntegrated() noexcept
+{
+    histogram.fill(0);
+    histogramEnergy.fill(0.0);
+    gatedBlockSamples = (int)momentaryWindow.energies.size();
+    integratedLUFS.store(-144.0f);
 }
 
 // ── calculateHistogramSummary ────────────────────────────────────────────────────────────
 LufsMeter::HistogramSummary LufsMeter::calculateHistogramSummary(size_t startBin) const noexcept
 {
     double sum = 0.0;
-    int count = 0;
+    uint64_t count = 0;
 
     for (size_t i = startBin; i < HISTOGRAM_BINS; ++i)
     {
         if (histogram[i] > 0)
         {
-            float lufs = HISTOGRAM_MIN_LUFS + (float)i * 0.1f;
-            double ms = std::pow(10.0, (lufs + 0.691) / 10.0);
-            sum += ms * histogram[i];
+            sum += histogramEnergy[i];
             count += histogram[i];
         }
     }
@@ -243,5 +207,5 @@ float LufsMeter::msToLUFS(double ms) noexcept
 {
     if (ms <= 0.0) return DspUtils::kSilenceDb;
     // BS.1770: L_K = -0.691 + 10 * log10(sum of channel mean-squares)
-    return -0.691f + DspUtils::powerToDb((float) ms);
+    return (float)(-0.691 + 10.0 * std::log10(ms));
 }

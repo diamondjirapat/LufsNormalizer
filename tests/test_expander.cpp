@@ -26,7 +26,11 @@ void testNoExpansionAboveThreshold() {
     juce::AudioBuffer<float> buffer(1, 1024);
     for (int i = 0; i < 1024; ++i) buffer.getWritePointer(0)[i] = 1.0f;
 
-    for(int i=0; i<100; ++i) expander.processBlock(buffer);
+    for(int block=0; block<100; ++block)
+    {
+        for (int i = 0; i < buffer.getNumSamples(); ++i) buffer.setSample(0, i, 1.0f);
+        expander.processBlock(buffer);
+    }
 
     float gr = expander.getGainReductionDb();
     std::cout << "Gain Reduction at 0dB (settled): " << gr << " dB" << std::endl;
@@ -85,7 +89,15 @@ void testStereoLinking() {
         buffer.getWritePointer(1)[i] = 0.001f;
     }
 
-    for(int i=0; i<100; ++i) expander.processBlock(buffer);
+    for(int block=0; block<100; ++block)
+    {
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            buffer.setSample(0, i, 1.0f);
+            buffer.setSample(1, i, 0.001f);
+        }
+        expander.processBlock(buffer);
+    }
     float gr = expander.getGainReductionDb();
     std::cout << "Stereo linked GR (one channel loud): " << gr << " dB" << std::endl;
     assert(std::abs(gr) < 0.1f);

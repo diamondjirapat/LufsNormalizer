@@ -170,6 +170,8 @@ LufsNormalizerProcessor::LufsNormalizerProcessor()
 // ── prepareToPlay ─────────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    maximumBlockSize = std::max(1, samplesPerBlock);
+    samplesPerBlock = maximumBlockSize;
     const int numCh = std::max(getTotalNumInputChannels(), getTotalNumOutputChannels());
     dryWetBuffer.setSize(numCh, samplesPerBlock, false, false, true);
 
@@ -183,6 +185,10 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 
     gainSmoother.prepare(sampleRate, samplesPerBlock, numCh);
     limiter    .prepare(sampleRate, samplesPerBlock, numCh);
+    const int maxDelay = (int)std::ceil(sampleRate * 0.050) + limiter.getLatencySamples();
+    dryDelayBuffer.setSize(numCh, maxDelay + 1);
+    dryDelayBuffer.clear();
+    dryDelayWritePos = 0;
 
     // Apply lookahead setting
     const bool  laEnabled = pLookaheadEnabled->load() > 0.5f;
@@ -199,6 +205,7 @@ void LufsNormalizerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 void LufsNormalizerProcessor::releaseResources()
 {
     dryWetBuffer.setSize(0, 0);
+    dryDelayBuffer.setSize(0, 0);
     gate.reset();
     expander.reset();
     compressor.reset();
@@ -226,6 +233,17 @@ bool LufsNormalizerProcessor::isBusesLayoutSupported(const BusesLayout& layouts)
 void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                             juce::MidiBuffer&)
 {
+    processAudio(buffer, false);
+}
+
+void LufsNormalizerProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer,
+                                                juce::MidiBuffer&)
+{
+    processAudio(buffer, true);
+}
+
+void LufsNormalizerProcessor::processAudio(juce::AudioBuffer<float>& buffer, bool bypassed)
+{
     juce::ScopedNoDenormals noDenormals;
     const int totalInputs = getTotalNumInputChannels();
     const int totalOutputs = getTotalNumOutputChannels();
@@ -237,23 +255,31 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (numSamples == 0 || totalOutputs == 0)
         return;
 
+    if (integratedResetRequested.exchange(false))
+    {
+        inputMeter.resetIntegrated();
+        outputMeter.resetIntegrated();
+    }
+
+    // A host may deliver more samples than its advertised maximum. Split them
+    // into prepared-size views without allocating on the audio thread.
+    for (int start = 0; start < numSamples; start += maximumBlockSize)
+    {
+        const int length = std::min(maximumBlockSize, numSamples - start);
+        juce::AudioBuffer<float> chunk(buffer.getArrayOfWritePointers(),
+                                      buffer.getNumChannels(), start, length);
+        processChunk(chunk, bypassed);
+    }
+}
+
+void LufsNormalizerProcessor::processChunk(juce::AudioBuffer<float>& buffer, bool bypassed)
+{
     // ── Measure input levels (before any processing) ──────────────────────────
     measureLevels(buffer, inputPeakDb, inputRmsDb);
     inputMeter.processBlock(buffer);
 
     // ── Save dry signal for dry/wet mix ───────────────────────────────────────
-    const float wetAmount = pDryWet->load() * 0.01f; // 0..1
-    if (wetAmount < 0.999f)
-    {
-        const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
-        const int dryWetSamples = std::min(buffer.getNumSamples(), dryWetBuffer.getNumSamples());
-
-        jassert(dryWetBuffer.getNumChannels() >= buffer.getNumChannels());
-        jassert(dryWetBuffer.getNumSamples() >= buffer.getNumSamples());
-
-        for (int ch = 0; ch < numCh; ++ch)
-            dryWetBuffer.copyFrom(ch, 0, buffer, ch, 0, dryWetSamples);
-    }
+    const float wetAmount = bypassed ? 0.0f : pDryWet->load() * 0.01f; // 0..1
 
     // ── Sync parameters (cheap atomic reads via cached pointers) ─────────────
     syncDspParameters();
@@ -268,6 +294,21 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                              + limiter.getLatencySamples();
         if (newLatency != getLatencySamples())
             setLatencySamples(newLatency);
+    }
+
+    // Always keep the dry delay warm, including at 100% wet. Both paths must
+    // arrive at the same sample to avoid comb filtering and incorrect PDC.
+    const int dryDelayLength = dryDelayBuffer.getNumSamples();
+    for (int i = 0; i < buffer.getNumSamples(); ++i)
+    {
+        const int readPos = (dryDelayWritePos - getLatencySamples() + dryDelayLength) % dryDelayLength;
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            float* delay = dryDelayBuffer.getWritePointer(ch);
+            delay[dryDelayWritePos] = buffer.getSample(ch, i);
+            dryWetBuffer.setSample(ch, i, delay[readPos]);
+        }
+        dryDelayWritePos = (dryDelayWritePos + 1) % dryDelayLength;
     }
 
     // ── 1. Gate ───────────────────────────────────────────────────────────────
@@ -322,7 +363,7 @@ void LufsNormalizerProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     limiter.processBlock(buffer);
 
     // ── 8. Dry/Wet mix ───────────────────────────────────────────────────────
-    if (wetAmount < 0.999f)
+    if (wetAmount < 1.0f)
     {
         const float dryAmount = 1.0f - wetAmount;
         const int numCh = std::min(buffer.getNumChannels(), dryWetBuffer.getNumChannels());
@@ -413,10 +454,11 @@ void LufsNormalizerProcessor::cacheParameterPointers()
 // ── Presets ───────────────────────────────────────────────────────────────────
 void LufsNormalizerProcessor::setCurrentProgram(int index)
 {
-    currentProgram = std::clamp(index, 0, (int)std::size(kPresets));
-    if (currentProgram == 0) return; // "Custom" – don't overwrite
+    const int program = std::clamp(index, 0, (int)std::size(kPresets));
+    currentProgram.store(program);
+    if (program == 0) return; // "Custom" – don't overwrite
 
-    const int presetIdx = currentProgram - 1;
+    const int presetIdx = program - 1;
     if (presetIdx < 0 || presetIdx >= (int)std::size(kPresets)) return;
 
     const auto& p = kPresets[presetIdx];
@@ -464,8 +506,6 @@ void LufsNormalizerProcessor::setCurrentProgram(int index)
     // Lookahead and mix
     setParam(ParamID::LOOKAHEAD_MS, p.lookaheadMs);
     setParam(ParamID::DRY_WET,      p.dryWet);
-
-    syncDspParameters();
 }
 
 const juce::String LufsNormalizerProcessor::getProgramName(int index)
@@ -481,7 +521,7 @@ const juce::String LufsNormalizerProcessor::getProgramName(int index)
 void LufsNormalizerProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty("currentProgram", currentProgram, nullptr);
+    state.setProperty("currentProgram", currentProgram.load(), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -492,7 +532,8 @@ void LufsNormalizerProcessor::setStateInformation(const void* data, int sizeInBy
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         auto newState = juce::ValueTree::fromXml(*xml);
-        currentProgram = newState.getProperty("currentProgram", 0);
+        currentProgram.store(std::clamp((int)newState.getProperty("currentProgram", 0),
+                                       0, (int)std::size(kPresets)));
         apvts.replaceState(newState);
     }
 }

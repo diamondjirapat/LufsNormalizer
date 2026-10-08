@@ -24,6 +24,7 @@ public:
 
     void processBlock(juce::AudioBuffer<float>& buffer)
     {
+        if (buffer.getNumSamples() == 0 || buffer.getNumChannels() == 0) return;
         if (!enabled.load())
         {
             gainReductionDb.store(0.0f);

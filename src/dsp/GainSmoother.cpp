@@ -16,6 +16,9 @@ void GainSmoother::prepare(double sampleRate, int maxBlockSize, int numChannels)
     // Allocate lookahead buffer (max 50 ms)
     const int maxLookahead = (int)std::ceil(sampleRate * 0.050);
     delayBuffer.setSize(numChannels, maxLookahead + maxBlockSize, false, true, false);
+    delayBuffer.clear();
+    lookaheadSamples = 0;
+    lookaheadEnabled = false;
     delayWritePos = 0;
 }
 
@@ -32,7 +35,8 @@ void GainSmoother::reset()
 void GainSmoother::setLookaheadMs(float ms, bool enabled)
 {
     lookaheadEnabled = enabled;
-    const int maxSamples = std::max(0, delayBuffer.getNumSamples() - 1);
+    const int maxSamples = std::min(std::max(0, delayBuffer.getNumSamples() - 1),
+                                    (int)std::ceil(sampleRate_ * 0.050));
     const int requestedSamples = enabled
         ? (int)std::round(sampleRate_ * (double)std::max(0.0f, ms) * 0.001)
         : 0;
@@ -109,7 +113,12 @@ void GainSmoother::processBlock(juce::AudioBuffer<float>& buffer)
             const float linGain = std::exp2(smoothedGainDb * 0.16609640474f);
 
             for (int ch = 0; ch < channelsToProcess; ++ch)
+            {
+                // Keep history current so enabling lookahead cannot replay stale audio.
+                delayPointers[ch][delayWritePos] = writePointers[ch][i];
                 writePointers[ch][i] *= linGain;
+            }
+            delayWritePos = (delayWritePos + 1) % delayBuffer.getNumSamples();
         }
     }
 

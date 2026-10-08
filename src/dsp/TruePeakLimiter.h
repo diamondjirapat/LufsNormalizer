@@ -29,7 +29,7 @@ public:
     /** Peak gain reduction applied this block (≤ 0 dB). Thread-safe. */
     float getGainReductionDb() const noexcept { return gainReductionDb.load(); }
 
-    /** Latency introduced by the 1 ms lookahead. */
+    /** Lookahead latency: at least 1 ms, extended to cover the FIR detector. */
     int getLatencySamples() const noexcept { return lookaheadSamples; }
 
 private:
@@ -40,16 +40,22 @@ private:
     std::atomic<bool>  enabled        {  true  };
     std::atomic<float> gainReductionDb{  0.0f  };
 
-    // 4x oversampling — recreated in prepare() with the correct channel count
+    // 4x FIR oversampling used for detection only, recreated in prepare().
     static constexpr int kOversamplingFactor = 4;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
 
-    // Lookahead delay (1 ms)
+    // Lookahead delay (at least 1 ms)
     juce::AudioBuffer<float> lookaheadBuffer;
     std::vector<float> perSamplePeak;
+    struct Peak { uint64_t sample; float value; };
+    std::vector<Peak> peakQueue;
+    size_t peakHead = 0, peakCount = 0;
+    uint64_t sampleIndex = 0;
+    int maximumBlockSize = 1;
     int  lookaheadSamples = 0;
     int  writePos         = 0;
 
     // Smoothed gain for the limiter
     float smoothedGain = 1.0f;
+    void processChunk(juce::AudioBuffer<float>& buffer);
 };

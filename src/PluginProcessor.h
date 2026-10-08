@@ -119,21 +119,25 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     using AudioProcessor::processBlock;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "LUFS Normalizer"; }
+    const juce::String getName() const override { return JucePlugin_Name; }
 
     bool   acceptsMidi()  const override { return false; }
     bool   producesMidi() const override { return false; }
     bool   isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override
+    {
+        return getSampleRate() > 0.0 ? getLatencySamples() / getSampleRate() : 0.0;
+    }
 
     int  getNumPrograms()    override { return (int)std::size(kPresets) + 1; }
-    int  getCurrentProgram() override { return currentProgram; }
+    int  getCurrentProgram() override { return currentProgram.load(); }
     void setCurrentProgram(int index) override;
     const juce::String getProgramName(int index) override;
     void changeProgramName(int, const juce::String&) override {}
@@ -171,9 +175,7 @@ public:
 
     void resetIntegrated()
     {
-        inputMeter.reset();
-        analysisMeter.reset();
-        outputMeter.reset();
+        integratedResetRequested.store(true);
     }
 
 private:
@@ -193,8 +195,12 @@ private:
     TruePeakLimiter limiter;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    int   currentProgram = 0;
+    std::atomic<int> currentProgram { 0 };
+    std::atomic<bool> integratedResetRequested { false };
+    int maximumBlockSize = 1;
     juce::AudioBuffer<float> dryWetBuffer;
+    juce::AudioBuffer<float> dryDelayBuffer;
+    int dryDelayWritePos = 0;
 
     // ── Cached parameter pointers (avoids string lookups per block) ───────────
     std::atomic<float>* pGateThreshold  = nullptr;
@@ -234,6 +240,8 @@ private:
     // ── Helpers ───────────────────────────────────────────────────────────────
     void syncDspParameters();
     void cacheParameterPointers();
+    void processAudio(juce::AudioBuffer<float>& buffer, bool bypassed);
+    void processChunk(juce::AudioBuffer<float>& buffer, bool bypassed);
     void measureLevels(const juce::AudioBuffer<float>& buffer,
                        std::atomic<float>& peakOut,
                        std::atomic<float>& rmsOut);

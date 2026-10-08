@@ -421,8 +421,8 @@ void LufsNormalizerEditor::layoutComponents()
     compAreaCopy.removeFromTop(8);
     auto compTitleRow = compAreaCopy.removeFromTop(24);
     compTitleRow.removeFromLeft(8);
-    compToggle.setBounds(compTitleRow.removeFromLeft(140));
-    compAutoMakeupToggle.setBounds(compTitleRow.removeFromLeft(140));
+    compToggle.setBounds(compTitleRow.removeFromLeft(compTitleRow.getWidth() / 2));
+    compAutoMakeupToggle.setBounds(compTitleRow);
     compAreaCopy.removeFromTop(8);
 
     // Process Titles for Row 2
@@ -550,7 +550,7 @@ void LufsNormalizerEditor::paint(juce::Graphics& g)
                    juce::Justification::centred, false);
 
         // Draw pill
-        const juce::String ver = "v1.3 | BS.1770-4";
+        const juce::String ver = "v" + juce::String(JucePlugin_VersionString) + " | BS.1770-4";
         g.setColour(juce::Colour(0xff1a1d2a));
         g.fillRoundedRectangle(pillArea.toFloat(), 8.0f);
         g.setColour(juce::Colour(0xff2a2e3e));
@@ -596,6 +596,7 @@ void LufsNormalizerEditor::drawSectionBackground(juce::Graphics& g,
 // ── timerCallback ─────────────────────────────────────────────────────────────
 void LufsNormalizerEditor::timerCallback()
 {
+    presetCombo.setSelectedId(processor.getCurrentProgram() + 1, juce::dontSendNotification);
     const float inMom  = processor.getInputMomentaryLUFS();
     const float inSt   = processor.getInputShortTermLUFS();
     const float inIntg = processor.getInputIntegratedLUFS();
@@ -609,12 +610,13 @@ void LufsNormalizerEditor::timerCallback()
     // Update input meter (raw audio)
     inputMeter.setPeakDb(processor.getInputPeakDb());
     inputMeter.setRmsDb(processor.getInputRmsDb());
+    inputMeter.updatePeakHold();
     inputMeter.repaint();
 
     // Update output meter
     outputMeter.setPeakDb(processor.getOutputPeakDb());
     outputMeter.setRmsDb(processor.getOutputRmsDb());
-    outputMeter.setTargetLUFS(targetLufs);
+    outputMeter.updatePeakHold();
     outputMeter.repaint();
 
     // Update GR meter
@@ -628,8 +630,8 @@ void LufsNormalizerEditor::timerCallback()
     if (++histTick >= 2)
     {
         histTick = 0;
-        levelHistory.pushInputValue(processor.getInputRmsDb());
-        levelHistory.pushOutputValue(processor.getOutputRmsDb());
+        levelHistory.pushInputValue(inMom);
+        levelHistory.pushOutputValue(outMom);
         levelHistory.setTargetLUFS(targetLufs);
     }
 

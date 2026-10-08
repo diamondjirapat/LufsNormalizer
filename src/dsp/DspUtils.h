@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <algorithm>
 
 /**
  * Shared DSP utilities used across multiple modules.
